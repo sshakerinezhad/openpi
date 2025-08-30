@@ -126,6 +126,27 @@ class FakeDataset(Dataset):
         return self._num_samples
 
 
+def create_behavior_dataset(data_config: _config.DataConfig, action_horizon: int) -> Dataset:
+    """Create a dataset for training."""
+    from omnigibson.learning.datas.lerobot_dataset import BehaviorLeRobotDataset
+    
+    dataset = BehaviorLeRobotDataset(
+        repo_id=data_config.repo_id,
+        root="/home/svl/Documents/test",
+        tasks=["turning_on_radio"],
+        modalities=["rgb"],
+        local_only=True,
+        delta_timestamps={
+            key: [t / 30.0 for t in range(action_horizon)] for key in data_config.action_sequence_keys
+        }
+    )
+
+    if data_config.prompt_from_task:
+        dataset = TransformedDataset(dataset, [_transforms.PromptFromLeRobotTask(dataset.meta.tasks)])
+
+    return dataset
+
+
 def create_torch_dataset(
     data_config: _config.DataConfig, action_horizon: int, model_config: _model.BaseModelConfig
 ) -> Dataset:
@@ -252,6 +273,31 @@ def create_data_loader(
         seed=config.seed,
         skip_norm_stats=skip_norm_stats,
     )
+
+
+def create_behavior_data_loader(
+    config: _config.TrainConfig,
+    *,
+    sharding: jax.sharding.Sharding | None = None,
+    shuffle: bool = False,
+    num_batches: int | None = None,
+    skip_norm_stats: bool = False,
+) -> DataLoader[tuple[_model.Observation, _model.Actions]]:
+    data_config = config.data.create(config.assets_dirs, config.model)
+    dataset = create_behavior_dataset(data_config, action_horizon=config.model.action_horizon)
+    dataset = transform_dataset(dataset, data_config, skip_norm_stats=skip_norm_stats)
+
+    data_loader = TorchDataLoader(
+        dataset,
+        local_batch_size=config.batch_size // jax.process_count(),
+        sharding=sharding,
+        shuffle=shuffle,
+        num_batches=num_batches,
+        num_workers=config.num_workers,
+        seed=config.seed,
+    )
+    
+    return DataLoaderImpl(data_config, data_loader)
 
 
 def create_torch_data_loader(

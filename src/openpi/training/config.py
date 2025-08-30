@@ -92,6 +92,10 @@ class DataConfig:
 
     # Only used for RLDS data loader (ie currently only used for DROID).
     rlds_data_dir: str | None = None
+
+    # If true, will use behavior lerobot dataset
+    behavior_dataset: bool = False
+
     # Action space for DROID dataset.
     action_space: droid_rlds_dataset.DroidActionSpace | None = None
 
@@ -339,6 +343,9 @@ class LeRobotLiberoDataConfig(DataConfigFactory):
 
 @dataclasses.dataclass(frozen=True)
 class LeRobotB1KDataConfig(DataConfigFactory):
+
+    action_sequence_keys: Sequence[str] = ("action",)
+
     @override
     def create(self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig) -> DataConfig:
         # Make inputs look like they come from the Libero environment
@@ -346,11 +353,11 @@ class LeRobotB1KDataConfig(DataConfigFactory):
             inputs=[
                 _transforms.RepackTransform(
                     {
-                        "observation/egocentric_camera": "egocentric_camera",
-                        "observation/wrist_image_left": "wrist_image_left",
-                        "observation/wrist_image_right": "wrist_image_right",
-                        "observation/joint_position": "joint_position",
-                        "actions": "actions",
+                        "observation/egocentric_camera": "observation.images.rgb.head",
+                        "observation/wrist_image_left": "observation.images.rgb.left_wrist",
+                        "observation/wrist_image_right": "observation.images.rgb.right_wrist",
+                        "observation/state": "observation.state",
+                        "actions": "action",
                         "prompt": "prompt",
                     }
                 )
@@ -372,6 +379,7 @@ class LeRobotB1KDataConfig(DataConfigFactory):
             repack_transforms=repack_transform,
             data_transforms=data_transforms,
             model_transforms=model_transforms,
+            action_sequence_keys=self.action_sequence_keys,
             use_quantile_norm = True,
             # use_quantile_norm = False,
         )
@@ -593,16 +601,18 @@ _CONFIGS = [
   
     # b1k configs
     TrainConfig(
-        name="pi0_b1k_turning_on_radio",
-        model=pi0.Pi0Config( action_horizon=50, paligemma_variant="gemma_2b_lora"),
+        name="pi0_b1k",
+        project_name = "B1K",
+        model=pi0.Pi0Config(action_horizon=50, paligemma_variant="gemma_2b_lora"),
         data=LeRobotB1KDataConfig(
             repo_id="behavior-1k/B50",
             base_config=DataConfig(
                 prompt_from_task=True,
-                episodes_index=list(range(200))
+                episodes_index=list(range(200)),
+                behavior_dataset=True,
             ),
         ),
-        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=30_000,
         freeze_filter=pi0.Pi0Config(
              action_horizon=50, paligemma_variant="gemma_2b_lora"

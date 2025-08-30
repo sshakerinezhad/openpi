@@ -9,7 +9,6 @@ import flax.nnx as nnx
 from flax.training import common_utils
 import flax.traverse_util as traverse_util
 import jax
-import jax.experimental
 import jax.numpy as jnp
 import numpy as np
 import optax
@@ -258,13 +257,13 @@ def init_wandb(config: _config.TrainConfig, *, resuming: bool, log_code: bool = 
         raise FileNotFoundError(f"Checkpoint directory {ckpt_dir} does not exist.")
     if resuming:
         run_id = (ckpt_dir / "wandb_id.txt").read_text().strip()
-        wandb.init(entity='Project_VIT', id=run_id, resume="must", project=config.project_name)
+        wandb.init(id=run_id, resume="must", project=config.project_name)
     else:
         wandb.init(
-            entity='Project_VIT',
             name=config.exp_name,
             config=dataclasses.asdict(config),
             project=config.project_name,
+            group="openpi"
         )
         (ckpt_dir / "wandb_id.txt").write_text(wandb.run.id)
 
@@ -419,10 +418,11 @@ def main(config: _config.TrainConfig):
     )
     init_wandb(config, resuming=resuming, enabled=config.wandb_enabled)
 
-    data_loader = _data_loader.create_data_loader(
+    data_loader = _data_loader.create_behavior_data_loader(
         config,
         sharding=data_sharding,
         shuffle=True,
+        skip_norm_stats=True
     )
     data_iter = iter(data_loader)
     batch = next(data_iter)

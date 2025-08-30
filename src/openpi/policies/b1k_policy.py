@@ -37,7 +37,22 @@ class B1kInputs(transforms.DataTransformFn):
 
     def __call__(self, data: dict) -> dict:
 
-        state = data["observation/joint_position"]
+        proprio_data = data["observation/state"]
+        # extract joint position
+        base_qvel = proprio_data[246:249] # 3
+        trunk_qpos = proprio_data[238:242] # 4
+        arm_left_qpos = proprio_data[158:165] #  7
+        arm_right_qpos = proprio_data[198:205] #  7
+        left_gripper_width = proprio_data[194:196].sum(axis=-1, keepdims=True) # 1
+        right_gripper_width = proprio_data[234:236].sum(axis=-1, keepdims=True) # 1
+        state = np.concatenate([
+            base_qvel,
+            trunk_qpos,
+            arm_left_qpos,
+            arm_right_qpos,
+            left_gripper_width,
+            right_gripper_width,
+        ])
         state = transforms.pad_to_dim(state, self.action_dim)
         if "actions" in data:
             action =  data["actions"]
@@ -79,7 +94,7 @@ class B1kInputs(transforms.DataTransformFn):
 
 @dataclasses.dataclass(frozen=True)
 class B1kOutputs(transforms.DataTransformFn):
-    action_dim: int = 21
+    action_dim: int = 23
     def __call__(self, data: dict) -> dict:
         # Only return the first 8 dims.
         return {"actions": np.asarray(data["actions"][:, :self.action_dim])}
