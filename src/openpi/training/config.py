@@ -380,8 +380,7 @@ class LeRobotB1KDataConfig(DataConfigFactory):
             data_transforms=data_transforms,
             model_transforms=model_transforms,
             action_sequence_keys=self.action_sequence_keys,
-            use_quantile_norm = True,
-            # use_quantile_norm = False,
+            use_quantile_norm=True,
         )
 
 @dataclasses.dataclass(frozen=True)
@@ -608,7 +607,7 @@ _CONFIGS = [
             repo_id="behavior-1k/B50",
             base_config=DataConfig(
                 prompt_from_task=True,
-                episodes_index=list(range(200)),
+                episodes_index=list(range(190)),
                 behavior_dataset=True,
             ),
         ),
@@ -618,6 +617,8 @@ _CONFIGS = [
              action_horizon=50, paligemma_variant="gemma_2b_lora"
         ).get_freeze_filter(),
         ema_decay=None,
+        val_repo_id="behavior-1k/B50",
+        val_episodes_index=list(range(190, 200)),
     ),
     
     #
