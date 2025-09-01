@@ -614,14 +614,15 @@ _CONFIGS = [
         ),
         weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=30_000,
-        save_interval=250,
-        keep_period=1000,
+        save_interval=500,
+        keep_period=2000,
         freeze_filter=pi0.Pi0Config(
              action_horizon=50, paligemma_variant="gemma_2b_lora"
         ).get_freeze_filter(),
         ema_decay=None,
         val_repo_id="behavior-1k/2025-challenge-demos",
         val_episodes_index=list(range(190, 200)),
+        num_workers=32,
     ),
     
     #

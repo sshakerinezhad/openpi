@@ -4,8 +4,8 @@
 #SBATCH --partition=viscam
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:h200:1
-#SBATCH --mem=384G
-#SBATCH --cpus-per-task=28
+#SBATCH --mem=750G
+#SBATCH --cpus-per-task=45
 #SBATCH --time=2-00:00:00
 #SBATCH --output=outputs/sc/train_openpi_%j.out
 #SBATCH --error=outputs/sc/train_openpi_%j.err
@@ -23,7 +23,7 @@ source /vision/u/$(whoami)/libs/openpi/.venv/bin/activate
 echo "Current time: $(date)"
 echo "Running with args: $@"
 
-uv run scripts/train_val.py pi0_b1k \
+XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_val.py pi0_b1k \
     --exp_name="openpi_$(date +%Y%m%d_%H%M%S)" \
     --overwrite \
     --batch_size=64 \
