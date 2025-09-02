@@ -10,7 +10,7 @@ class B1KPolicyWrapper():
     def __init__(
         self, 
         policy: BasePolicy,
-        text_prompt : str = "turning on radio",
+        text_prompt : str = "Turn on the radio receiver that's on the table in the living room.",
         control_mode : str = "temporal_ensemble",
     ) -> None:
         self.policy = policy
