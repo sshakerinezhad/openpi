@@ -4,6 +4,7 @@ from openpi_client.base_policy import BasePolicy
 from openpi_client.image_tools import resize_with_pad
 from collections import deque
 import copy
+from omnigibson.learning.utils.eval_utils import PROPRIOCEPTION_INDICES
 RESIZE_SIZE = 224
 
 class B1KPolicyWrapper():
@@ -31,12 +32,12 @@ class B1KPolicyWrapper():
         self.step_counter = 0
     
     def generate_prop_state(self, proprio_data):
-        base_qvel = proprio_data[:, 246:249]  # 3
-        trunk_qpos = proprio_data[:, 238:242]  # 4
-        arm_left_qpos = proprio_data[:, 158:165]  #  7
-        arm_right_qpos = proprio_data[:, 198:205]  #  7
-        left_gripper_width = proprio_data[:, 194:196].sum(axis=-1)[:, None]  # 1
-        right_gripper_width = proprio_data[:, 234:236].sum(axis=-1)[:, None]  # 1
+        base_qvel = proprio_data[:, PROPRIOCEPTION_INDICES["R1Pro"]["base_qvel"]]  # 3
+        trunk_qpos = proprio_data[:, PROPRIOCEPTION_INDICES["R1Pro"]["trunk_qpos"]]  # 4
+        arm_left_qpos = proprio_data[:, PROPRIOCEPTION_INDICES["R1Pro"]["arm_left_qpos"]]  #  7
+        arm_right_qpos = proprio_data[:, PROPRIOCEPTION_INDICES["R1Pro"]["arm_right_qpos"]]  #  7
+        left_gripper_width = proprio_data[:, PROPRIOCEPTION_INDICES["R1Pro"]["gripper_left_qpos"]].sum(axis=-1)[:, None]  # 1
+        right_gripper_width = proprio_data[:, PROPRIOCEPTION_INDICES["R1Pro"]["gripper_right_qpos"]].sum(axis=-1)[:, None]  # 1
 
         prop_state = np.concatenate(
             (base_qvel, trunk_qpos, arm_left_qpos, arm_right_qpos, left_gripper_width, right_gripper_width), axis=-1
