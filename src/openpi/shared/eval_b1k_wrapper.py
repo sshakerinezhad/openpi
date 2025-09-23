@@ -4,7 +4,6 @@ from openpi_client.base_policy import BasePolicy
 from openpi_client.image_tools import resize_with_pad
 from collections import deque
 import copy
-from openpi.policies.b1k_policy import extract_state_from_proprio
 
 RESIZE_SIZE = 224
 
@@ -167,7 +166,7 @@ class B1KPolicyWrapper():
             if len(self.action_queue) > 0:
                 # pop the first action in the queue
                 final_action = self.action_queue.popleft()[None]
-                return final_action[..., :23]
+                return torch.from_numpy(final_action[..., :23])
         
         nbatch = copy.deepcopy(input_obs)
         if nbatch["observation"].shape[-1] != 3: 

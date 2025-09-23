@@ -6,6 +6,7 @@ import socket
 import tyro
 
 from omnigibson.learning.utils.network_utils import WebsocketPolicyServer
+from omnigibson.learning.datas import BehaviorLerobotDatasetMetadata
 
 from openpi.policies import policy as _policy
 from openpi.policies import policy_config as _policy_config
@@ -48,6 +49,11 @@ class Args:
     # prompt.
     default_prompt: str | None = None
 
+    # Dataset root, used to retrieve the prompt of the task if taskname is not None.
+    dataset_root: str | None = "/scr/behavior/2025-challenge-demos"
+    # If provided, will be used to retrieve the prompt of the task, otherwise use turning_on_radio as default.
+    task_name: str | None = None
+
     # Port to serve the policy on.
     port: int = 8000
     # Record the policy's behavior for debugging.
@@ -65,6 +71,17 @@ def create_policy(args: Args) -> _policy.Policy:
 
 
 def main(args: Args) -> None:
+    metadata = BehaviorLerobotDatasetMetadata(
+        repo_id="behavior-1k/2025-challenge-demos",
+        root=args.dataset_root,
+        tasks=[args.task_name] if args.task_name else "turning_on_radio",
+        modalities=[],
+        cameras=[],
+    )
+    prompt = list(metadata.tasks.values())[0]
+    # log the prompt used
+    logging.info(f"Using prompt: {prompt}")
+
     policy = create_policy(args)
     policy_metadata = policy.metadata
 
@@ -72,7 +89,7 @@ def main(args: Args) -> None:
     if args.record:
         policy = _policy.PolicyRecorder(policy, "policy_records")
 
-    policy = B1KPolicyWrapper(policy)
+    policy = B1KPolicyWrapper(policy, text_prompt=prompt)
 
     hostname = socket.gethostname()
     local_ip = socket.gethostbyname(hostname)
