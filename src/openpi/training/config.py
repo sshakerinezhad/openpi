@@ -697,6 +697,34 @@ _CONFIGS = [
             ),
         ),
     ),
+
+    TrainConfig(
+        name="pi0",
+        exp_name="openpi",
+        project_name="B1K",
+        model=pi0_config.Pi0Config(action_horizon=50, paligemma_variant="gemma_2b"),
+        data=LeRobotB1KDataConfig(
+            repo_id="behavior-1k/2025-challenge-demos",
+            base_config=DataConfig(
+                prompt_from_task=False,
+                prompt_from_skill_annotations=True,
+                episodes_index=list(range(190)),
+                behavior_dataset_root="/vision/group/behavior/2025-challenge-demos",
+            ),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=50_000,
+        freeze_filter=pi0_config.Pi0Config(
+             action_horizon=50, paligemma_variant="gemma_2b"
+        ).get_freeze_filter(),
+        ema_decay=None,
+        val_log_interval=2500,
+        val_repo_id="behavior-1k/2025-challenge-demos",
+        val_episodes_index=list(range(190, 200)),
+        assets_base_dir="./outputs/assets",
+        checkpoint_base_dir="./outputs/checkpoints",
+        num_workers=min(32, os.cpu_count() - 2),
+    ),
   
     # b1k configs
     TrainConfig(
@@ -720,6 +748,34 @@ _CONFIGS = [
         ).get_freeze_filter(),
         ema_decay=None,
         val_log_interval=2500,
+        val_repo_id="behavior-1k/2025-challenge-demos",
+        val_episodes_index=list(range(190, 200)),
+        assets_base_dir="./outputs/assets",
+        checkpoint_base_dir="./outputs/checkpoints",
+        num_workers=min(32, os.cpu_count() - 2),
+    ),
+
+    TrainConfig(
+        name="pi05",
+        exp_name="openpi",
+        project_name="B1K",
+        model=pi0_config.Pi0Config(pi05=True, action_horizon=50, paligemma_variant="gemma_2b"),
+        data=LeRobotB1KDataConfig(
+            repo_id="behavior-1k/2025-challenge-demos",
+            base_config=DataConfig(
+                prompt_from_task=False,
+                prompt_from_skill_annotations=True,
+                episodes_index=list(range(190)),
+                behavior_dataset_root="/vision/group/behavior/2025-challenge-demos",
+            ),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_base/params"),
+        num_train_steps=50_000,
+        freeze_filter=pi0_config.Pi0Config(
+            pi05=True, action_horizon=50, paligemma_variant="gemma_2b"
+        ).get_freeze_filter(),
+        ema_decay=None,
+        val_log_interval=5000,
         val_repo_id="behavior-1k/2025-challenge-demos",
         val_episodes_index=list(range(190, 200)),
         assets_base_dir="./outputs/assets",
@@ -752,9 +808,9 @@ _CONFIGS = [
         val_episodes_index=list(range(190, 200)),
         assets_base_dir="./outputs/assets",
         checkpoint_base_dir="./outputs/checkpoints",
-        num_workers=1,
+        num_workers=min(32, os.cpu_count() - 2),
     ),
-    
+
     #
     # Fine-tuning Libero configs.
     #
