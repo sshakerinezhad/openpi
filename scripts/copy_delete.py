@@ -5,6 +5,7 @@ import time
 import os
 
 ONE_HOUR = 3600
+# outputs/checkpoints/{config_name}/{EXP_NAME}/
 base_local = os.path.normpath("outputs/checkpoints/pi0_b1k/openpi_20250929_035039/")
 base_s3 = f"s3://behavior-challenge/{base_local}"
 idx = 0

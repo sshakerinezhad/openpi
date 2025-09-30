@@ -339,7 +339,7 @@ class PromptFromSkillAnnotations(DataTransformFn):
 
     def __call__(self, data: DataDict) -> DataDict:
         if "skill_prompts" not in data:
-            raise ValueError('Cannot extract skill prompt without "skill_prompts"')
+            return {**data, "prompt": get_prompt_from_task(data, self.tasks)}
 
         frame_idx = int(data["timestamp"] * 30)
         skill_prompts = data["skill_prompts"]
@@ -351,13 +351,10 @@ class PromptFromSkillAnnotations(DataTransformFn):
                 prompt_idx = idx
                 break
 
-        prompt = None
         if prompt_idx is None:
-            prompt = get_prompt_from_task(data, self.tasks)
+            return {**data, "prompt": get_prompt_from_task(data, self.tasks)}
         else:
-            prompt = skill_prompts[prompt_idx]["prompt"]
-
-        return {**data, "prompt": prompt}
+            return {**data, "prompt": skill_prompts[prompt_idx]["prompt"]}
 
 
 @dataclasses.dataclass(frozen=True)
