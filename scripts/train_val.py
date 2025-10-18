@@ -121,7 +121,7 @@ def _create_validation_data_loader(
         sharding=replicated_sharding,
         shuffle=False,
         num_batches=val_config.val_num_batches,
-        num_workers=val_config.num_workers,
+        num_workers=1,
         seed=val_config.seed,
     )
 

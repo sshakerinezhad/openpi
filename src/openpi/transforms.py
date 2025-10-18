@@ -4,6 +4,7 @@ import re
 from typing import Protocol, TypeAlias, TypeVar, runtime_checkable
 import json
 from pathlib import Path
+import random
 
 import flax.traverse_util as traverse_util
 import jax
@@ -336,14 +337,22 @@ class PromptFromSkillAnnotations(DataTransformFn):
 
     # Contains the LeRobot dataset tasks (dataset.meta.tasks).
     tasks: dict[int, str]
+    use_base_prompt_pct: float = 0.0
 
     def __call__(self, data: DataDict) -> DataDict:
+        # If no skill prompts are available, use the base prompt.
         if "skill_prompts" not in data:
+            return {**data, "prompt": get_prompt_from_task(data, self.tasks)}
+
+        # Randomly use the base prompt with a given probability
+        if random.random() < self.use_base_prompt_pct:
             return {**data, "prompt": get_prompt_from_task(data, self.tasks)}
 
         frame_idx = int(data["timestamp"] * 30)
         skill_prompts = data["skill_prompts"]
 
+        # Iterate over the skill prompts and find the one that corresponds to the current frame
+        # within this episode.
         prompt_idx = None
         for idx, skill in enumerate(skill_prompts):
             start, end = skill["frame_duration"]
@@ -351,6 +360,7 @@ class PromptFromSkillAnnotations(DataTransformFn):
                 prompt_idx = idx
                 break
 
+        # If no skill annotated prompt is found, use the base prompt.
         if prompt_idx is None:
             return {**data, "prompt": get_prompt_from_task(data, self.tasks)}
         else:
@@ -367,6 +377,26 @@ class PadStatesAndActions(DataTransformFn):
         data["state"] = pad_to_dim(data["state"], self.model_action_dim, axis=-1)
         if "actions" in data:
             data["actions"] = pad_to_dim(data["actions"], self.model_action_dim, axis=-1)
+        return data
+
+
+@dataclasses.dataclass(frozen=True)
+class ZeroOutProprio(DataTransformFn):
+    """Randomly zero out the proprioceptive state with a given probability.
+
+    The transform sets the entire `state` vector to zeros with probability
+    `zero_out_proprio_pct`. If the `state` key is not present, this is a no-op.
+    """
+
+    zero_out_proprio_pct: float = 0.0
+
+    def __call__(self, data: DataDict) -> DataDict:
+        if self.zero_out_proprio_pct <= 0.0:
+            return data
+        if "state" not in data:
+            return data
+        if random.random() < self.zero_out_proprio_pct:
+            data["state"] = np.zeros_like(data["state"])
         return data
 
 

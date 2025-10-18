@@ -71,6 +71,9 @@ class DataConfig:
     # Contains precomputed normalization stats. If None, normalization will not be performed.
     norm_stats: dict[str, _transforms.NormStats] | None = None
 
+    # Tasks to use for the dataset.
+    tasks: Sequence[str] | None = ("turning_on_radio")
+
     # Used to adopt the inputs from a dataset specific format to a common format
     # which is expected by the data transforms.
     repack_transforms: _transforms.Group = dataclasses.field(default_factory=_transforms.Group)
@@ -92,11 +95,16 @@ class DataConfig:
     prompt_from_task: bool = False
     # If true, will use on-disk skill annotations to define the prompt.
     prompt_from_skill_annotations: bool = False
+    # Percentage of time to use the base prompt instead of skill annotated prompt.
+    prompt_from_skill_annotations_use_base_prompt_pct: float = 0.0
     # Root directory that contains "annotations/..." (for LeRobot local/Behavior datasets).
     # If None for Behavior datasets, it defaults to `behavior_dataset_root`.
     skill_annotations_dir: str | None = None
     # Candidate JSON keys to pull the annotation text from.
     skill_annotation_keys: Sequence[str] = ("skill", "skill_name", "language_instruction", "annotation", "description")
+
+    # Percentage of time to zero out the proprioception data.
+    zero_out_proprio_pct: float = 0.0
 
     # Only used for RLDS data loader (ie currently only used for DROID).
     rlds_data_dir: str | None = None
@@ -791,9 +799,18 @@ _CONFIGS = [
         data=LeRobotB1KDataConfig(
             repo_id="behavior-1k/2025-challenge-demos",
             base_config=DataConfig(
+                tasks=[
+                    "turning_on_radio",
+                    "picking_up_trash",
+                    "boxing_books_up_for_storage",
+                    "attach_a_camera_to_a_tripod",
+                    "freeze_pies",
+                ],
                 prompt_from_task=False,
                 prompt_from_skill_annotations=True,
-                episodes_index=list(range(190)),
+                prompt_from_skill_annotations_use_base_prompt_pct=0.5,
+                zero_out_proprio_pct=0.5,
+                episodes_index=list(range(90)),
                 behavior_dataset_root="/vision/group/behavior/2025-challenge-demos",
             ),
         ),
