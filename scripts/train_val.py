@@ -190,6 +190,7 @@ def _compute_validation_losses(
 
     if not losses:
         return None
+
     return float(jnp.mean(jnp.array(losses)))
 
 

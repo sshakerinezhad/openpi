@@ -4,7 +4,7 @@ from pathlib import Path
 import time
 import os
 
-ONE_HOUR = 3600
+FIVE_MINUTES = 300
 
 idx = 0
 all_checkpoints_dir = Path("outputs/checkpoints")
@@ -51,4 +51,4 @@ while True:
                 if step in steps_to_delete and successfully_synced:
                     shutil.rmtree(Path(local_path), ignore_errors=True)
 
-    time.sleep(ONE_HOUR)
+    time.sleep(FIVE_MINUTES)
