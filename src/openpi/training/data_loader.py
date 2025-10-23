@@ -217,7 +217,10 @@ def transform_dataset(dataset: Dataset, data_config: _config.DataConfig, *, skip
             *data_config.repack_transforms.inputs,
             *data_config.data_transforms.inputs,
             _transforms.Normalize(norm_stats, use_quantiles=data_config.use_quantile_norm),
-            _transforms.ZeroOutProprio(zero_out_proprio_pct=data_config.zero_out_proprio_pct),
+            _transforms.ProprioDropout(
+                dropout_whole_proprio_pct=data_config.proprio_dropout_dropout_whole_proprio_pct,
+                proprio_groups=data_config.proprio_dropout_proprio_groups,
+            ),
             *data_config.model_transforms.inputs,
         ],
     )

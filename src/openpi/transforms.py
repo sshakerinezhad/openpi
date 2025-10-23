@@ -265,7 +265,7 @@ class TokenizePrompt(DataTransformFn):
         if not isinstance(prompt, str):
             prompt = prompt.item()
 
-        tokens, token_masks = self.tokenizer.tokenize(prompt, state)
+        tokens, token_masks = self.tokenizer.tokenize(prompt, state, data.get("proprio_visibility_mask"))
         return {**data, "tokenized_prompt": tokens, "tokenized_prompt_mask": token_masks}
 
 
@@ -381,22 +381,32 @@ class PadStatesAndActions(DataTransformFn):
 
 
 @dataclasses.dataclass(frozen=True)
-class ZeroOutProprio(DataTransformFn):
-    """Randomly zero out the proprioceptive state with a given probability.
+class ProprioDropout(DataTransformFn):
+    """Randomly drops out the proprioceptive state with a given probability."""
 
-    The transform sets the entire `state` vector to zeros with probability
-    `zero_out_proprio_pct`. If the `state` key is not present, this is a no-op.
-    """
-
-    zero_out_proprio_pct: float = 0.0
+    dropout_whole_proprio_pct: float = 0.0
+    proprio_groups: Sequence[tuple[Sequence[int], float]] = ()
 
     def __call__(self, data: DataDict) -> DataDict:
-        if self.zero_out_proprio_pct <= 0.0:
+        if self.dropout_whole_proprio_pct <= 0.0 and not self.proprio_groups:
             return data
+
         if "state" not in data:
             return data
-        if random.random() < self.zero_out_proprio_pct:
-            data["state"] = np.zeros_like(data["state"])
+
+        if random.random() < self.dropout_whole_proprio_pct:
+            # Set the mask to all zeros
+            data["proprio_visibility_mask"] = np.zeros_like(data["state"])
+        else:
+            # Initialize the mask to all ones
+            data["proprio_visibility_mask"] = np.ones_like(data["state"])
+
+            # Drop out each group with the specified probability
+            for group in self.proprio_groups:
+                dims, p = group
+                if random.random() < p:
+                    data["proprio_visibility_mask"][..., dims] = 0
+
         return data
 
 

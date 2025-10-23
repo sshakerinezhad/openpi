@@ -104,7 +104,8 @@ class DataConfig:
     skill_annotation_keys: Sequence[str] = ("skill", "skill_name", "language_instruction", "annotation", "description")
 
     # Percentage of time to zero out the proprioception data.
-    zero_out_proprio_pct: float = 0.0
+    proprio_dropout_dropout_whole_proprio_pct: float = 0.0
+    proprio_dropout_proprio_groups: Sequence[tuple[Sequence[int], float]] = ()
 
     # Only used for RLDS data loader (ie currently only used for DROID).
     rlds_data_dir: str | None = None
@@ -809,7 +810,13 @@ _CONFIGS = [
                 prompt_from_task=False,
                 prompt_from_skill_annotations=True,
                 prompt_from_skill_annotations_use_base_prompt_pct=0.5,
-                zero_out_proprio_pct=0.5,
+                proprio_dropout_dropout_whole_proprio_pct=0.3,
+                proprio_dropout_proprio_groups=[
+                    ((0, 1, 2), 0.3),  # base velocity
+                    ((3, 4, 5, 6), 0.3),  # trunk position
+                    ((7, 8, 9, 10, 11, 12, 13, 21), 0.3),  # left arm + gripper position
+                    ((14, 15, 16, 17, 18, 19, 20, 22), 0.3),  # right arm + gripper position
+                ],
                 episodes_index=list(range(90)),
                 behavior_dataset_root="/vision/group/behavior/2025-challenge-demos",
             ),

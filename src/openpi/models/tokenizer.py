@@ -19,12 +19,18 @@ class PaligemmaTokenizer:
         with path.open("rb") as f:
             self._tokenizer = sentencepiece.SentencePieceProcessor(model_proto=f.read())
 
-    def tokenize(self, prompt: str, state: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray]:
+    def tokenize(self, prompt: str, state: np.ndarray | None = None, proprio_visibility_mask: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray]:
         cleaned_text = prompt.strip().replace("_", " ").replace("\n", " ")
         if state is not None:
             # This is the Pi05 format, where the state is part of the discrete language input.
             discretized_state = np.digitize(state, bins=np.linspace(-1, 1, 256 + 1)[:-1]) - 1
-            state_str = " ".join(map(str, discretized_state))
+            # Mask out the state dimensions that are not visible with an asterisk
+            if proprio_visibility_mask is None:
+                proprio_visibility_mask = np.ones_like(state)
+            state_str = " ".join(map(
+                lambda x, is_visible: str(x) if is_visible else "*",
+                zip(discretized_state, proprio_visibility_mask.astype(bool))
+            ))
             full_prompt = f"Task: {cleaned_text}, State: {state_str};\nAction: "
             tokens = self._tokenizer.encode(full_prompt, add_bos=True)
         else:
