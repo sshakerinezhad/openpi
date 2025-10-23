@@ -1,5 +1,6 @@
 import dataclasses
 import functools
+import gc
 import logging
 import platform
 from typing import Any
@@ -169,19 +170,23 @@ def _compute_validation_losses(
     # the specific seed offset is arbitrary.
     val_rng = jax.random.key(config.seed + 1000)
 
-    for batch_idx in range(config.val_num_batches):
-        try:
-            batch = next(val_iter)
-        except StopIteration:
-            break
+    try:
+        for batch_idx in range(config.val_num_batches):
+            try:
+                batch = next(val_iter)
+            except StopIteration:
+                break
 
-        try:
-            with sharding.set_mesh(mesh):
-                loss = pvalidation_step(train_state, batch, val_rng)
-            losses.append(jax.device_get(loss))
-        except (RuntimeError, ValueError) as e:
-            logging.warning("Error computing validation loss for batch %d: %s", batch_idx, e)
-            continue
+            try:
+                with sharding.set_mesh(mesh):
+                    loss = pvalidation_step(train_state, batch, val_rng)
+                losses.append(jax.device_get(loss))
+            except (RuntimeError, ValueError) as e:
+                logging.warning("Error computing validation loss for batch %d: %s", batch_idx, e)
+                continue
+    finally:
+        # Clean up the iterator to prevent resource leaks
+        del val_iter
 
     if not losses:
         return None
@@ -224,8 +229,22 @@ def compute_validation_loss(
         logging.warning("Skipping validation loss computation.")
         return None
 
-    # Compute and return validation losses
-    return _compute_validation_losses(val_loader, train_state, mesh, train_state_sharding, replicated_sharding, config)
+    # Compute validation losses and ensure proper cleanup of the data loader
+    try:
+        val_loss = _compute_validation_losses(val_loader, train_state, mesh, train_state_sharding, replicated_sharding, config)
+    finally:
+        # Explicitly clean up the validation data loader to prevent resource leaks in multi-GPU setups
+        # This is critical to avoid hanging after ~5000 steps when validation runs
+        if hasattr(val_loader, '_torch_data_loader'):
+            torch_data_loader = val_loader._torch_data_loader
+            if hasattr(torch_data_loader, '_data_loader'):
+                # Delete any references to prevent hanging iterators
+                del torch_data_loader._data_loader
+        del val_loader
+        # Force garbage collection to ensure all resources are released
+        gc.collect()
+    
+    return val_loss
 
 
 def init_logging():
@@ -470,9 +489,11 @@ def main(config: _config.TrainConfig):
             wandb.log(reduced_info, step=step)
             infos = []
         if step % config.val_log_interval == 0:
+            logging.info("Computing validation loss at step %d", step)
             val_loss = compute_validation_loss(
                 config, train_state, mesh, train_state_sharding, replicated_sharding, data_loader
             )
+            logging.info("Done computing validation loss at step %d", step)
             if val_loss is not None:
                 wandb.log({"val_loss": val_loss}, step=step)
                 logging.info("Validation loss at step %d: %.4f", step, val_loss)
