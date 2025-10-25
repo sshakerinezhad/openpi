@@ -824,12 +824,13 @@ _CONFIGS = [
                 prompt_from_task=False,
                 prompt_from_skill_annotations=True,
                 prompt_from_skill_annotations_use_base_prompt_pct=0.5,
-                proprio_dropout_dropout_whole_proprio_pct=0.2,
+                proprio_dropout_dropout_whole_proprio_pct=0.3,
                 proprio_dropout_proprio_groups=[
-                    ((0, 1, 2), 0.3),  # base velocity
+                    ((0, 1, 2), 0.2),  # base velocity
                     ((3, 4, 5, 6), 0.2),  # trunk position
-                    ((7, 8, 9, 10, 11, 12, 13, 21), 0.3),  # left arm + gripper position
-                    ((14, 15, 16, 17, 18, 19, 20, 22), 0.3),  # right arm + gripper position
+                    # ((7, 8, 9, 10, 11, 12, 13, 21), 0.4),  # left arm + gripper position
+                    # ((14, 15, 16, 17, 18, 19, 20, 22), 0.4),  # right arm + gripper position
+                    ((7, 8, 9, 10, 11, 12, 13, 21, 14, 15, 16, 17, 18, 19, 20, 22), 0.75),  # boths arm + grippers positions
                 ],
                 episodes_index=list(range(75)),
                 behavior_dataset_root="/vision/group/behavior/2025-challenge-demos",
