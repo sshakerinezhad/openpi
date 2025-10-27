@@ -848,7 +848,7 @@ _CONFIGS = [
                     ((17, 18), 0.2),  # right upper arm positions
                     ((19, 20, 22), 0.2),  # right forearm and gripper position
                 ],
-                episodes_index=list(range(75)),
+                episodes_index=list(range(20, 60)),
                 behavior_dataset_root="/scratch/vision/group/behavior/2025-challenge-demos",
             ),
         ),
@@ -869,7 +869,7 @@ _CONFIGS = [
         val_episodes_index=list(range(190, 200)),
         assets_base_dir="./outputs/assets",
         checkpoint_base_dir="./outputs/checkpoints",
-        num_workers=min(64, os.cpu_count() - 2),
+        num_workers=8,
     ),
 
     #
