@@ -360,10 +360,14 @@ class PromptFromSkillAnnotations(DataTransformFn):
         # within this episode.
         prompt_idx = None
         for idx, skill in enumerate(skill_prompts):
-            start, end = skill["frame_duration"]
-            if start <= frame_idx < end:
-                prompt_idx = idx
-                break
+            frame_duration_lists = skill["frame_duration"]
+            if isinstance(frame_duration_lists, list) and len(frame_duration_lists) == 2 and all(isinstance(x, int) for x in frame_duration_lists):
+                frame_duration_lists = [frame_duration_lists]
+            for frame_duration in frame_duration_lists:
+                start, end = frame_duration
+                if start <= frame_idx < end:
+                    prompt_idx = idx
+                    break
 
         # If no skill annotated prompt is found, use the base prompt.
         if prompt_idx is None:

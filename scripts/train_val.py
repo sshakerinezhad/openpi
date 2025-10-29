@@ -49,6 +49,11 @@ def _prepare_validation_config(
     val_config = dataclasses.replace(
         config,
         batch_size=config.val_batch_size or config.batch_size,
+        banned_skill_descriptions=None,
+        prompt_from_task=True,
+        prompt_from_skill_annotations=False,
+        prompt_from_skill_annotations_use_base_prompt_pct=0.0,
+        prefer_prompt_from_data=False,
     )
 
     use_norm_stats = False
