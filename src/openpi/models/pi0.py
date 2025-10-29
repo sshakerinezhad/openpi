@@ -9,6 +9,7 @@ from typing_extensions import override
 
 from openpi.models import model as _model
 from openpi.models import pi0_config
+from openpi.models import pi0_loss_utils
 import openpi.models.gemma as _gemma
 import openpi.models.siglip as _siglip
 from openpi.shared import array_typing as at
@@ -83,6 +84,9 @@ class Pi0(_model.BaseModel):
     def __init__(self, config: pi0_config.Pi0Config, rngs: nnx.Rngs):
         super().__init__(config.action_dim, config.action_horizon, config.max_token_len)
         self.pi05 = config.pi05
+        self.loss_weighting_strategy = config.loss_weighting_strategy
+        self.action_groups = config.action_groups
+        self.group_weights = config.group_weights
         paligemma_config = _gemma.get_config(config.paligemma_variant)
         action_expert_config = _gemma.get_config(config.action_expert_variant)
         # TODO: rewrite gemma in NNX. For now, use bridge.
@@ -232,13 +236,21 @@ class Pi0(_model.BaseModel):
         )
         v_t = self.action_out_proj(suffix_out[:, -self.action_horizon :])  # [B, AH, AD]
 
-        # ----- base per-timestep diffusion loss -----
-        base_loss = jnp.mean(jnp.square(v_t - u_t), axis=-1)  # [B, AH]
+        # ----- compute weighted diffusion loss -----
+        # Per-dimension loss (before weighting)
+        per_dim_loss = jnp.square(v_t - u_t)  # [B, AH, AD]
+        
+        # Apply configurable loss weighting strategy
+        weighted_loss = pi0_loss_utils.compute_weighted_loss(
+            per_dim_loss,
+            actions,
+            weighting_strategy=self.loss_weighting_strategy,
+            action_groups=self.action_groups,
+            group_weights=self.group_weights,
+            use_delta_weighting=True,
+        )  # [B, AH]
 
-        # weight by action delta magnitude
-        w = _delta_action_weights(actions)
-
-        return w * base_loss  # [B, AH]
+        return weighted_loss  # [B, AH]
 
     @override
     def sample_actions(

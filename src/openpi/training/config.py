@@ -801,7 +801,30 @@ _CONFIGS = [
         name="pi05_b1k",
         exp_name="openpi",
         project_name="B1K",
-        model=pi0_config.Pi0Config(pi05=True, action_horizon=50, paligemma_variant="gemma_2b_lora"),
+        model=pi0_config.Pi0Config(
+            pi05=True,
+            action_horizon=50,
+            paligemma_variant="gemma_2b_lora",
+            loss_weighting_strategy="per_group",
+            action_groups={
+                "base": (0, 3),             # base x-y-theta velocity
+                "trunk": (3, 7),            # trunk joints
+                "left_arm": (7, 14),        # left arm joints
+                "left_gripper": (14, 15),   # left gripper width
+                "right_arm": (15, 22),      # right arm joints
+                "right_gripper": (22, 23),  # right gripper width
+                "padding": (23, 32),        # padding dimensions
+            },
+            group_weights={
+                "base": 1.0,       # Reduce base importance
+                "trunk": 2.0,
+                "left_arm": 3.0,   # 10x more than base!
+                "left_gripper": 2.5,
+                "right_arm": 3.0,
+                "right_gripper": 2.5,
+                "padding": 0.0,
+            },
+        ),
         data=LeRobotB1KDataConfig(
             repo_id="behavior-1k/2025-challenge-demos",
             base_config=DataConfig(

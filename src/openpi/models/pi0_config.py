@@ -31,6 +31,16 @@ class Pi0Config(_model.BaseModelConfig):
     pi05: bool = False
     # This config option is not used directly by the model, but it is read by the ModelTransformFactory.
     discrete_state_input: bool = None  # type: ignore
+    
+    # Loss weighting configuration to address arm/navigation imbalance
+    # Options: "original" (navigation-biased), "per_group" (recommended), "per_dimension", "uniform"
+    loss_weighting_strategy: str = "per_group"
+    # Action groups for "per_group" weighting strategy
+    # Default is for B1K robot (23 dims padded to 32)
+    action_groups: dict[str, tuple[int, int]] | None = None
+    # Relative weights for each action group (higher = more important)
+    # Default emphasizes arm control over navigation
+    group_weights: dict[str, float] | None = None
 
     def __post_init__(self):
         if self.max_token_len is None:

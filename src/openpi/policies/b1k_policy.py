@@ -34,8 +34,8 @@ def extract_state_from_proprio(proprio_data):
         base_qvel,
         trunk_qpos,
         arm_left_qpos,
-        arm_right_qpos,
         left_gripper_width,
+        arm_right_qpos,
         right_gripper_width,
     ], axis=-1)
 

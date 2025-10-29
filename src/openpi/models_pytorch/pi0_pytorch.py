@@ -9,6 +9,7 @@ import torch.nn.functional as F  # noqa: N812
 import openpi.models.gemma as _gemma
 from openpi.models_pytorch.gemma_pytorch import PaliGemmaWithExpertModel
 import openpi.models_pytorch.preprocessing_pytorch as _preprocessing
+from openpi.models_pytorch import pi0_loss_utils_pytorch
 
 
 def get_safe_dtype(target_dtype, device_type):
@@ -86,6 +87,9 @@ class PI0Pytorch(nn.Module):
         super().__init__()
         self.config = config
         self.pi05 = config.pi05
+        self.loss_weighting_strategy = getattr(config, "loss_weighting_strategy", "per_group")
+        self.action_groups = getattr(config, "action_groups", None)
+        self.group_weights = getattr(config, "group_weights", None)
 
         paligemma_config = _gemma.get_config(config.paligemma_variant)
         action_expert_config = _gemma.get_config(config.action_expert_variant)
@@ -370,7 +374,20 @@ class PI0Pytorch(nn.Module):
 
         v_t = self._apply_checkpoint(action_out_proj_func, suffix_out)
 
-        return F.mse_loss(u_t, v_t, reduction="none")
+        # Compute per-dimension loss
+        per_dim_loss = F.mse_loss(u_t, v_t, reduction="none")  # [B, H, D]
+        
+        # Apply configurable loss weighting strategy
+        weighted_loss = pi0_loss_utils_pytorch.compute_weighted_loss(
+            per_dim_loss,
+            actions,
+            weighting_strategy=self.loss_weighting_strategy,
+            action_groups=self.action_groups,
+            group_weights=self.group_weights,
+            use_delta_weighting=True,
+        )  # [B, H]
+        
+        return weighted_loss
 
     @torch.no_grad()
     def sample_actions(self, device, observation, noise=None, num_steps=10) -> Tensor:
