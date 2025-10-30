@@ -124,7 +124,7 @@ Output: [
 
 Now, generate the instruction for the provided input JSON."""
     preprocessed_actions = preprocess_actions(actions)
-    user_content = f"Task name: {task_name}\nSkill annotation JSON array:\n{json.dumps(preprocessed_actions, indent=2)}\nExisting prompts:\n{json.dumps(existing_prompts, indent=2)}"
+    user_content = f"Task name: {task_name}\nSkill annotation JSON array:\n{json.dumps(preprocessed_actions, indent=2)}\nExisting prompts:\n{json.dumps(existing_prompts, indent=2)}\nReminder: for this task, there are {len(actions)} actions objects, so you should return a list of exactly {len(actions)} prompts."
     response = client.responses.create(
         model=model,
         instructions=system_prompt,

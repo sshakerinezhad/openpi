@@ -878,7 +878,7 @@ _CONFIGS = [
                     ((17, 18), 0.2),  # right upper arm positions
                     ((19, 20, 22), 0.2),  # right forearm and gripper position
                 ],
-                episodes_index=list(range(75, 130)),
+                episodes_index=list(range(75, 120)),
                 behavior_dataset_root="/scratch/vision/group/behavior/2025-challenge-demos",
                 banned_skill_descriptions=[
                     "move to",
