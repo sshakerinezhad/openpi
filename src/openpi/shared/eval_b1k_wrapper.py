@@ -33,12 +33,12 @@ class B1KPolicyWrapper():
 
         dataset_root = config.data.base_config.behavior_dataset_root
         self.task_prompt_map = {}
-        TASKS_METADATA_PATH = os.path.join(dataset_root, "meta/episodes.json")
+        TASKS_METADATA_PATH = os.path.join(dataset_root, "meta/tasks.jsonl")
         if os.path.exists(TASKS_METADATA_PATH):
             with open(TASKS_METADATA_PATH, "r") as f:
-                tasks_metadata = json.load(f)
-            for task in tasks_metadata:
-                self.task_prompt_map[task["index"]] = task["task"]
+                for line in f:
+                    task = json.loads(line)
+                    self.task_prompt_map[task["task_index"]] = task["task"]
 
     def reset(self):
         self.action_queue = deque([],maxlen=self.action_horizon)
@@ -102,7 +102,7 @@ class B1KPolicyWrapper():
                 "observation/wrist_image_left": nbatch["observation"][0, 1],
                 "observation/wrist_image_right": nbatch["observation"][0, 2],
                 "observation/state": joint_positions,
-                "prompt": self.text_prompt,
+                "prompt": input_obs["prompt"],
             }
 
             try:
@@ -204,9 +204,9 @@ class B1KPolicyWrapper():
             "observation/wrist_image_left": nbatch["observation"][0, 1],
             "observation/wrist_image_right": nbatch["observation"][0, 2],
             "observation/state": joint_positions,
-            "prompt": self.text_prompt,
+            "prompt": nbatch["prompt"],
         }
-        print(f"batch['prompt'] i.e. self.text_prompt is: {batch['prompt']}")
+        print(f"batch['prompt']: {batch['prompt']}")
         try:
             action = self.policy.infer(batch) 
             self.last_action = action
