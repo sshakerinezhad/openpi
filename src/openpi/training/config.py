@@ -818,9 +818,9 @@ _CONFIGS = [
             group_weights={
                 "base": 1.0,
                 "trunk": 1.0,
-                "left_arm": 4,
+                "left_arm": 4.0,
                 "left_gripper": 2.0,
-                "right_arm": 4,
+                "right_arm": 4.0,
                 "right_gripper": 2.0,
                 "padding": 0.0,
             },
@@ -895,8 +895,8 @@ _CONFIGS = [
         lr_schedule=_optimizer.CosineDecaySchedule(
             warmup_steps=2_000,
             peak_lr=2.5e-5,
-            decay_steps=18_000,
-            decay_lr=2e-6,
+            decay_steps=50_000,
+            decay_lr=2.5e-6,
         ),
         ema_decay=None,
         val_log_interval=5000,

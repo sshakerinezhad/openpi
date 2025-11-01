@@ -9,5 +9,6 @@ HF_HOME=/scratch/huggingface/ XLA_PYTHON_CLIENT_MEM_FRACTION=0.92 OMNIGIBSON_NO_
     --exp_name="$EXP_NAME" \
     --overwrite \
     --batch_size=256 \
-    --weight_loader.params_path=/root/openpi/outputs/checkpoints/pi05_b1k/openpi_05_20251030_212650/15000/params \
-    --num_train_steps=50000
+    --weight_loader.params_path=/root/openpi/outputs/checkpoints/pi05_b1k/openpi_05_20251031_192101/5000/params \
+    --num_train_steps=50000 \
+    --val_log_interval=2000
