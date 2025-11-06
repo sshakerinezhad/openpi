@@ -207,6 +207,7 @@ class B1KPolicyWrapper():
             "prompt": nbatch["prompt"],
         }
         print(f"batch['prompt']: {batch['prompt']}")
+
         try:
             action = self.policy.infer(batch) 
             self.last_action = action

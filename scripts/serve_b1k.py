@@ -71,17 +71,6 @@ def create_policy(args: Args, config: _config.TrainConfig) -> _policy.Policy:
 
 
 def main(args: Args) -> None:
-    metadata = BehaviorLerobotDatasetMetadata(
-        repo_id="behavior-1k/2025-challenge-demos",
-        root=args.dataset_root,
-        tasks=[args.task_name] if args.task_name else "turning_on_radio",
-        modalities=[],
-        cameras=[],
-    )
-    prompt = list(metadata.tasks.values())[0]
-    # log the prompt used
-    logging.info(f"Using prompt: {prompt}")
-
     config = _config.get_config(args.policy.config)
     policy = create_policy(args, config)
     policy_metadata = policy.metadata
@@ -90,7 +79,7 @@ def main(args: Args) -> None:
     if args.record:
         policy = _policy.PolicyRecorder(policy, "policy_records")
 
-    policy = B1KPolicyWrapper(policy, config=config, text_prompt=prompt)
+    policy = B1KPolicyWrapper(policy, config=config, text_prompt="Hello, world!")
 
     hostname = socket.gethostname()
     local_ip = socket.gethostbyname(hostname)
