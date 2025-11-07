@@ -124,7 +124,7 @@ class DataConfig:
     episodes_index : List[int] | None = None
 
     # Skill descriptions to ban from the prompt
-    undersampled_skill_descriptions: Dict[str, float] | None = None
+    undersampled_skill_descriptions: dict[str, float] | None = None
 
 class GroupFactory(Protocol):
     def __call__(self, model_config: _model.BaseModelConfig) -> _transforms.Group:
