@@ -124,7 +124,7 @@ class DataConfig:
     episodes_index : List[int] | None = None
 
     # Skill descriptions to ban from the prompt
-    banned_skill_descriptions: List[str] | None = None
+    undersampled_skill_descriptions: Dict[str, float] | None = None
 
 class GroupFactory(Protocol):
     def __call__(self, model_config: _model.BaseModelConfig) -> _transforms.Group:
@@ -881,10 +881,10 @@ _CONFIGS = [
                 proprio_dropout_proprio_groups=[],
                 episodes_index=list(range(75, 120)),
                 behavior_dataset_root="/vision/group/behavior/2025-challenge-demos",
-                banned_skill_descriptions=[
-                    "move to",
-                    "pick up from",
-                ],
+                undersampled_skill_descriptions={
+                    "move to": 0.08,
+                    "pick up from": 0.2,
+                },
                 prefer_prompt_from_data=True,
             ),
         ),
