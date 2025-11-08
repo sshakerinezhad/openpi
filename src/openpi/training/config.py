@@ -124,7 +124,7 @@ class DataConfig:
     episodes_index : List[int] | None = None
 
     # Skill descriptions to ban from the prompt
-    banned_skill_descriptions: List[str] | None = None
+    undersampled_skill_descriptions: dict[str, float] | None = None
 
 class GroupFactory(Protocol):
     def __call__(self, model_config: _model.BaseModelConfig) -> _transforms.Group:
@@ -805,37 +805,19 @@ _CONFIGS = [
             pi05=True,
             action_horizon=50,
             paligemma_variant="gemma_2b_lora",
-            loss_weighting_strategy="per_group",
-            action_groups={
-                "base": (0, 3),             # base x-y-theta velocity
-                "trunk": (3, 7),            # trunk joints
-                "left_arm": (7, 14),        # left arm joints
-                "left_gripper": (14, 15),   # left gripper width
-                "right_arm": (15, 22),      # right arm joints
-                "right_gripper": (22, 23),  # right gripper width
-                "padding": (23, 32),        # padding dimensions
-            },
-            group_weights={
-                "base": 1.0,
-                "trunk": 1.0,
-                "left_arm": 4.0,
-                "left_gripper": 2.0,
-                "right_arm": 4.0,
-                "right_gripper": 2.0,
-                "padding": 0.0,
-            },
+            loss_weighting_strategy="original",
         ),
         data=LeRobotB1KDataConfig(
             repo_id="behavior-1k/2025-challenge-demos",
             base_config=DataConfig(
-                tasks=None,  # use all tasks
-                # tasks=[
-                #     "turning_on_radio",  # 0
-                #     "picking_up_trash",  # 1
+                # tasks=None,  # use all tasks
+                tasks=[
+                    "turning_on_radio",  # 0
+                    "picking_up_trash",  # 1
                 #     "cleaning_up_plates_and_food",  # 3
                 #     "can_meat",  # 4
                 #     "setting_mousetraps",  # 5
-                #     "picking_up_toys",  # 7
+                    "picking_up_toys",  # 7
                 #     # "putting_dishes_away_after_cleaning",  # 11, but missing annotations
                 #     "loading_the_car",  # 13
                 #     "bringing_in_wood",  # 15
@@ -863,27 +845,28 @@ _CONFIGS = [
                 #     "freeze_pies",  # 47
                 #     "canning_food",  # 48
                 #     "make_pizza",  # 49
-                # ],
+                ],
                 prompt_from_task=False,
                 prompt_from_skill_annotations=True,
-                prompt_from_skill_annotations_use_base_prompt_pct=0.3,
-                proprio_dropout_dropout_whole_proprio_pct=0.3,
-                proprio_dropout_proprio_groups=[
-                    ((0, 1, 2), 0.2),  # base velocity
-                    ((3, 4, 5, 6), 0.2),  # trunk positions
-                    ((7, 8, 9), 0.1),  # left shoulder positions
-                    ((10, 11), 0.1),  # left upper arm positions
-                    ((12, 13, 14), 0.1),  # left forearm and gripper position
-                    ((15, 16, 17), 0.1),  # right shoulder positions
-                    ((18, 19), 0.1),  # right upper arm positions
-                    ((20, 21, 22), 0.1),  # right forearm and gripper position
-                ],
-                episodes_index=list(range(75, 120)),
+                prompt_from_skill_annotations_use_base_prompt_pct=0.4,
+                proprio_dropout_dropout_whole_proprio_pct=0.4,
+                # proprio_dropout_proprio_groups=[
+                #     ((0, 1, 2), 0.2),  # base velocity
+                #     ((3, 4, 5, 6), 0.2),  # trunk positions
+                #     ((7, 8, 9), 0.1),  # left shoulder positions
+                #     ((10, 11), 0.1),  # left upper arm positions
+                #     ((12, 13, 14), 0.1),  # left forearm and gripper position
+                #     ((15, 16, 17), 0.1),  # right shoulder positions
+                #     ((18, 19), 0.1),  # right upper arm positions
+                #     ((20, 21, 22), 0.1),  # right forearm and gripper position
+                # ],
+                proprio_dropout_proprio_groups=[],
+                episodes_index=list(range(190)),  # Should take range(45) now? Or maybe 120, 165. Def never before seen. I am desperate after all... Or maybe just do turning_on_radio now? That is actually not a bad idea...
                 behavior_dataset_root="/vision/group/behavior/2025-challenge-demos",
-                banned_skill_descriptions=[
-                    "move to",
-                    "pick up from",
-                ],
+                undersampled_skill_descriptions={
+                    "move to": 0.3,
+                    "pick up from": 0.4,
+                },
                 prefer_prompt_from_data=True,
             ),
         ),
@@ -894,9 +877,9 @@ _CONFIGS = [
         ).get_freeze_filter(),
         lr_schedule=_optimizer.CosineDecaySchedule(
             warmup_steps=2_000,
-            peak_lr=2.5e-5,
+            peak_lr=2e-5,
             decay_steps=50_000,
-            decay_lr=2.5e-6,
+            decay_lr=2e-6,
         ),
         ema_decay=None,
         val_log_interval=5000,

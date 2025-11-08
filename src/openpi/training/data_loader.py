@@ -143,7 +143,7 @@ def create_behavior_dataset(data_config: _config.DataConfig, action_horizon: int
         episodes=data_config.episodes_index,
         chunk_streaming_using_keyframe=True,
         shuffle=True,
-        banned_skill_descriptions=data_config.banned_skill_descriptions,
+        undersampled_skill_descriptions=data_config.undersampled_skill_descriptions,
     )
 
     # Prefer skill annotations when requested; otherwise fall back to task->prompt mapping.
