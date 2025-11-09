@@ -782,19 +782,22 @@ _CONFIGS = [
             repo_id="behavior-1k/2025-challenge-demos",
             base_config=DataConfig(
                 tasks=[
-                    "turning_on_radio",  # 0
                     "picking_up_trash",  # 1
                     "picking_up_toys",  # 7
+                    "rearranging_kitchen_furniture",  # 8
+                    "putting_shoes_on_rack",  # 22
+                    "attach_a_camera_to_a_tripod",  # 35
+                    "chop_an_onion",  # 42
                 ],
                 prompt_from_task=False,
                 prompt_from_skill_annotations=True,
                 prompt_from_skill_annotations_use_base_prompt_pct=0.6,
-                proprio_dropout_dropout_whole_proprio_pct=0.6,
+                proprio_dropout_dropout_whole_proprio_pct=1.0,
                 episodes_index=list(range(190)),  # Should take range(45) now? Or maybe 120, 165. Def never before seen. I am desperate after all... Or maybe just do turning_on_radio now? That is actually not a bad idea...
                 behavior_dataset_root="/vision/group/behavior/2025-challenge-demos",
                 undersampled_skill_descriptions={
                     "move to": 0.3,
-                    "pick up from": 0.3,
+                    "pick up from": 0.5,
                 },
                 prefer_prompt_from_data=True,
             ),
