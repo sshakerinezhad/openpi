@@ -823,35 +823,7 @@ _CONFIGS = [
     ),
 
     TrainConfig(
-        name="pi05",
-        exp_name="openpi",
-        project_name="B1K",
-        model=pi0_config.Pi0Config(pi05=True, action_horizon=50, paligemma_variant="gemma_2b"),
-        data=LeRobotB1KDataConfig(
-            repo_id="behavior-1k/2025-challenge-demos",
-            base_config=DataConfig(
-                prompt_from_task=False,
-                prompt_from_skill_annotations=True,
-                episodes_index=list(range(190)),
-                behavior_dataset_root="/vision/group/behavior/2025-challenge-demos",
-            ),
-        ),
-        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_base/params"),
-        num_train_steps=50_000,
-        freeze_filter=pi0_config.Pi0Config(
-            pi05=True, action_horizon=50, paligemma_variant="gemma_2b"
-        ).get_freeze_filter(),
-        ema_decay=None,
-        val_log_interval=5000,
-        val_repo_id="behavior-1k/2025-challenge-demos",
-        val_episodes_index=list(range(190, 200)),
-        assets_base_dir="./outputs/assets",
-        checkpoint_base_dir="./outputs/checkpoints",
-        num_workers=min(32, os.cpu_count() - 2),
-    ),
-
-    TrainConfig(
-        name="pi05_b1k",
+        name="pi05_single_task",
         exp_name="openpi",
         project_name="B1K",
         model=pi0_config.Pi0Config(
@@ -863,58 +835,18 @@ _CONFIGS = [
         data=LeRobotB1KDataConfig(
             repo_id="behavior-1k/2025-challenge-demos",
             base_config=DataConfig(
-                # tasks=None,  # use all tasks
                 tasks=[
-                    "turning_on_radio",  # 0
-                    "picking_up_trash",  # 1
-                #     "cleaning_up_plates_and_food",  # 3
-                #     "can_meat",  # 4
-                #     "setting_mousetraps",  # 5
-                    "picking_up_toys",  # 7
-                #     # "putting_dishes_away_after_cleaning",  # 11, but missing annotations
-                #     "loading_the_car",  # 13
-                #     "bringing_in_wood",  # 15
-                #     "moving_boxes_to_storage",  # 16
-                #     "bringing_water",  # 17
-                #     "tidying_bedroom",  # 18
-                #     "sorting_vegetables",  # 20
-                #     "putting_shoes_on_rack",  # 22
-                #     "boxing_books_up_for_storage",  # 23
-                #     "clearing_food_from_table_into_fridge",  # 25
-                #     "sorting_household_items",  # 27
-                #     "setting_the_fire",  # 30
-                #     "wash_dog_toys",  # 33
-                #     "hanging_pictures",  # 34
-                #     "attach_a_camera_to_a_tripod",  # 35
-                #     "clean_a_trumpet",  # 37
-                #     "spraying_for_bugs",  # 38
-                #     "spraying_fruit_trees",  # 39
-                #     "make_microwave_popcorn",  # 40
-                #     # 41 is also missing annotations, so not included
-                #     "chop_an_onion",  # 42
-                #     "slicing_vegetables",  # 43
-                #     "cook_hot_dogs",  # 45
-                #     "cook_bacon",  # 46
-                #     "freeze_pies",  # 47
-                #     "canning_food",  # 48
-                #     "make_pizza",  # 49
+                    "moving_boxes_to_storage",  # 16
                 ],
-                prompt_from_task=False,
-                prompt_from_skill_annotations=True,
-                prompt_from_skill_annotations_use_base_prompt_pct=0.5,
-                proprio_dropout_dropout_whole_proprio_pct=0.25,
-                proprio_dropout_proprio_groups=[
-                    ((0, 1, 2), 0.2),  # base velocity
-                    ((3, 4, 5, 6), 0.2),  # trunk positions
-                    ((7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22), 0.2),  # arms
-                ],
+                prompt_from_task=True,
+                prompt_from_skill_annotations=False,
+                prompt_from_skill_annotations_use_base_prompt_pct=1.0,
+                proprio_dropout_dropout_whole_proprio_pct=0.6,
+                proprio_dropout_proprio_groups=[],
                 episodes_index=list(range(190)),  # Should take range(45) now? Or maybe 120, 165. Def never before seen. I am desperate after all... Or maybe just do turning_on_radio now? That is actually not a bad idea...
                 behavior_dataset_root="/vision/group/behavior/2025-challenge-demos",
-                undersampled_skill_descriptions={
-                    "move to": 0.5,
-                    "pick up from": 0.5,
-                },
-                prefer_prompt_from_data=True,
+                undersampled_skill_descriptions=None,
+                prefer_prompt_from_data=False,
             ),
         ),
         weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_base/params"),
@@ -935,6 +867,53 @@ _CONFIGS = [
         assets_base_dir="./outputs/assets",
         checkpoint_base_dir="./outputs/checkpoints",
         num_workers=16,  # Safe with OMNIGIBSON_NO_SIGNALS=1; use fewer workers to reduce memory pressure
+    ),
+
+    TrainConfig(
+        name="pi05_single_task_picking_up_trash",
+        exp_name="openpi",
+        project_name="B1K",
+        model=pi0_config.Pi0Config(
+            pi05=True,
+            action_horizon=256,
+            paligemma_variant="gemma_2b_lora",
+            loss_weighting_strategy="original",
+        ),
+        data=LeRobotB1KDataConfig(
+            repo_id="behavior-1k/2025-challenge-demos",
+            base_config=DataConfig(
+                tasks=[
+                    "picking_up_trash",  # 16
+                ],
+                prompt_from_task=True,
+                prompt_from_skill_annotations=False,
+                prompt_from_skill_annotations_use_base_prompt_pct=1.0,
+                proprio_dropout_dropout_whole_proprio_pct=0.6,
+                proprio_dropout_proprio_groups=[],
+                episodes_index=list(range(190)),  # Should take range(45) now? Or maybe 120, 165. Def never before seen. I am desperate after all... Or maybe just do turning_on_radio now? That is actually not a bad idea...
+                behavior_dataset_root="/vision/group/behavior/2025-challenge-demos",
+                undersampled_skill_descriptions=None,
+                prefer_prompt_from_data=False,
+            ),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_base/params"),
+        num_train_steps=50_000,
+        freeze_filter=pi0_config.Pi0Config(
+            pi05=True, action_horizon=50, paligemma_variant="gemma_2b_lora"
+        ).get_freeze_filter(),
+        lr_schedule=_optimizer.CosineDecaySchedule(
+            warmup_steps=2_000,
+            peak_lr=1e-5,
+            decay_steps=50_000,
+            decay_lr=1e-6,
+        ),
+        ema_decay=None,
+        val_log_interval=5000,
+        val_repo_id="behavior-1k/2025-challenge-demos",
+        val_episodes_index=list(range(190, 200)),
+        assets_base_dir="./outputs/assets",
+        checkpoint_base_dir="./outputs/checkpoints",
+        num_workers=4,  # Safe with OMNIGIBSON_NO_SIGNALS=1; use fewer workers to reduce memory pressure
     ),
 
     TrainConfig(
