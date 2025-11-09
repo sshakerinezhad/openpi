@@ -853,7 +853,7 @@ _CONFIGS = [
         project_name="B1K",
         model=pi0_config.Pi0Config(
             pi05=True,
-            action_horizon=50,
+            action_horizon=256,
             paligemma_variant="gemma_2b_lora",
             loss_weighting_strategy="original",
         ),
@@ -931,7 +931,7 @@ _CONFIGS = [
         val_episodes_index=list(range(190, 200)),
         assets_base_dir="./outputs/assets",
         checkpoint_base_dir="./outputs/checkpoints",
-        num_workers=4,  # Safe with OMNIGIBSON_NO_SIGNALS=1; use fewer workers to reduce memory pressure
+        num_workers=16,  # Safe with OMNIGIBSON_NO_SIGNALS=1; use fewer workers to reduce memory pressure
     ),
 
     TrainConfig(
