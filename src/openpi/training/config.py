@@ -774,7 +774,7 @@ _CONFIGS = [
         exp_name="openpi",
         project_name="B1K",
         model=pi0_config.Pi0Config(
-            action_horizon=50,
+            action_horizon=256,
             paligemma_variant="gemma_2b_lora",
             loss_weighting_strategy="original",
         ),
@@ -788,13 +788,13 @@ _CONFIGS = [
                 ],
                 prompt_from_task=False,
                 prompt_from_skill_annotations=True,
-                prompt_from_skill_annotations_use_base_prompt_pct=0.3,
-                proprio_dropout_dropout_whole_proprio_pct=0.4,
+                prompt_from_skill_annotations_use_base_prompt_pct=0.6,
+                proprio_dropout_dropout_whole_proprio_pct=0.6,
                 episodes_index=list(range(190)),  # Should take range(45) now? Or maybe 120, 165. Def never before seen. I am desperate after all... Or maybe just do turning_on_radio now? That is actually not a bad idea...
                 behavior_dataset_root="/vision/group/behavior/2025-challenge-demos",
                 undersampled_skill_descriptions={
-                    "move to": 0.5,
-                    "pick up from": 0.5,
+                    "move to": 0.3,
+                    "pick up from": 0.3,
                 },
                 prefer_prompt_from_data=True,
             ),
@@ -802,7 +802,7 @@ _CONFIGS = [
         weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=50_000,
         freeze_filter=pi0_config.Pi0Config(
-            action_horizon=50, paligemma_variant="gemma_2b_lora"
+            action_horizon=256, paligemma_variant="gemma_2b_lora"
         ).get_freeze_filter(),
         lr_schedule=_optimizer.CosineDecaySchedule(
             warmup_steps=2_000,
@@ -816,7 +816,7 @@ _CONFIGS = [
         val_episodes_index=list(range(190, 200)),
         assets_base_dir="./outputs/assets",
         checkpoint_base_dir="./outputs/checkpoints",
-        num_workers=4,  # Safe with OMNIGIBSON_NO_SIGNALS=1; use fewer workers to reduce memory pressure
+        num_workers=8,  # Safe with OMNIGIBSON_NO_SIGNALS=1; use fewer workers to reduce memory pressure
     ),
 
     TrainConfig(
