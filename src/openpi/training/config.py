@@ -789,12 +789,7 @@ _CONFIGS = [
                 prompt_from_task=False,
                 prompt_from_skill_annotations=True,
                 prompt_from_skill_annotations_use_base_prompt_pct=0.3,
-                proprio_dropout_dropout_whole_proprio_pct=0.2,
-                proprio_dropout_proprio_groups=[
-                    ((0, 1, 2), 0.2),  # base velocity
-                    ((3, 4, 5, 6), 0.2),  # trunk positions
-                    ((7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22), 0.2),  # arms
-                ],
+                proprio_dropout_dropout_whole_proprio_pct=0.4,
                 episodes_index=list(range(190)),  # Should take range(45) now? Or maybe 120, 165. Def never before seen. I am desperate after all... Or maybe just do turning_on_radio now? That is actually not a bad idea...
                 behavior_dataset_root="/vision/group/behavior/2025-challenge-demos",
                 undersampled_skill_descriptions={

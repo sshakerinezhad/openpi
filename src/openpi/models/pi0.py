@@ -175,7 +175,14 @@ class Pi0(_model.BaseModel):
             # add a single state token
             state_token = self.state_proj(obs.state)[:, None, :]
             tokens.append(state_token)
-            input_mask.append(jnp.ones((obs.state.shape[0], 1), dtype=jnp.bool_))
+            # Check if we have a proprio visibility mask from ProprioDropout
+            if obs.proprio_visibility_mask is not None:
+                # If ALL elements are masked (all zeros), mask out the entire state token
+                # Otherwise, keep the token valid (partially masked elements will contribute 0 after normalization)
+                state_mask = jnp.any(obs.proprio_visibility_mask, axis=-1, keepdims=True)  # [B, 1]
+            else:
+                state_mask = jnp.ones((obs.state.shape[0], 1), dtype=jnp.bool_)
+            input_mask.append(state_mask)
             # image/language inputs do not attend to state or actions
             ar_mask += [True]
 
