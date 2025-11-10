@@ -229,7 +229,8 @@ class DataConfigFactory(abc.ABC):
         if asset_id is None:
             return None
         try:
-            data_assets_dir = str(assets_dir / asset_id)
+            # data_assets_dir = str(assets_dir / asset_id)
+            data_assets_dir = "outputs/assets/pi05_b1k/behavior-1k/2025-challenge-demos/"
             norm_stats = _normalize.load(_download.maybe_download(data_assets_dir))
             logging.info(f"Loaded norm stats from {data_assets_dir}")
             return norm_stats
