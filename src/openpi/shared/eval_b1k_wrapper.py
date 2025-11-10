@@ -206,7 +206,7 @@ class B1KPolicyWrapper():
             "observation/state": joint_positions,
             "prompt": nbatch["prompt"],
         }
-        print(f"batch['prompt']: {batch['prompt']}")
+        # print(f"batch['prompt']: {batch['prompt']}")
 
         try:
             action = self.policy.infer(batch) 
