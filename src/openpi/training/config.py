@@ -127,7 +127,10 @@ class DataConfig:
     undersampled_skill_descriptions: dict[str, float] | None = None
 
     # Multiplier to oversample boundaries
-    oversample_boundaries_multiplier: float | None = None
+    boundary_oversampling_factor: int = 1
+
+    # Window frames to oversample boundaries
+    boundary_window_frames: int = 0
 
 class GroupFactory(Protocol):
     def __call__(self, model_config: _model.BaseModelConfig) -> _transforms.Group:
@@ -966,9 +969,10 @@ _CONFIGS = [
                 proprio_dropout_proprio_groups=[],
                 episodes_index=(list(range(182)) + list(range(183, 190))),
                 undersampled_skill_descriptions={
-                    "move to": 0.3,
+                    "move to": 0.6,
                 },
-                oversample_boundaries_multiplier=20.0,
+                boundary_oversampling_factor=3,
+                boundary_window_frames=40,
                 behavior_dataset_root="/vision/group/behavior/2025-challenge-demos",
                 prefer_prompt_from_data=False,
             ),
@@ -976,7 +980,7 @@ _CONFIGS = [
         weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_base/params"),
         num_train_steps=50_000,
         freeze_filter=pi0_config.Pi0Config(
-            pi05=True, action_horizon=50, paligemma_variant="gemma_2b_lora"
+            pi05=True, action_horizon=256, paligemma_variant="gemma_2b_lora"
         ).get_freeze_filter(),
         lr_schedule=_optimizer.CosineDecaySchedule(
             warmup_steps=2_000,
@@ -1065,8 +1069,10 @@ _CONFIGS = [
                 proprio_dropout_proprio_groups=[],
                 episodes_index=(list(range(182)) + list(range(183, 190))),
                 undersampled_skill_descriptions={
-                    "move to": 0.4,
+                    "move to": 0.6,
                 },
+                boundary_oversampling_factor=3,
+                boundary_window_frames=40,
                 behavior_dataset_root="/vision/group/behavior/2025-challenge-demos",
                 prefer_prompt_from_data=False,
             ),

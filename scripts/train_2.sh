@@ -11,7 +11,7 @@ CUDA_VISIBLE_DEVICES=2,3 XLA_PYTHON_CLIENT_MEM_FRACTION=0.92 OMNIGIBSON_NO_SIGNA
     --num_train_steps=50000 \
     --val_log_interval=3000
 
-# # Run this again at some point
+# # Run this again at some point for completing turn on radio task
 # EXP_NAME="openpi_05_20251110_211927"
 # echo "Experiment name: $EXP_NAME"
 

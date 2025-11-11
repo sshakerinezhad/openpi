@@ -144,6 +144,8 @@ def create_behavior_dataset(data_config: _config.DataConfig, action_horizon: int
         chunk_streaming_using_keyframe=True,
         shuffle=True,
         undersampled_skill_descriptions=data_config.undersampled_skill_descriptions,
+        boundary_oversampling_factor=data_config.boundary_oversampling_factor,
+        boundary_window_frames=data_config.boundary_window_frames,
     )
 
     # Prefer skill annotations when requested; otherwise fall back to task->prompt mapping.
