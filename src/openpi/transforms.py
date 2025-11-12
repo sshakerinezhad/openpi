@@ -309,6 +309,10 @@ class ExtractFASTActions(DataTransformFn):
         }
 
 
+def prefix_task_index_to_prompt(task_index: int, prompt: str) -> str:
+    return f"[task-{task_index:04d}]: {prompt}"
+
+
 def get_prompt_from_task_or_data(data: int, tasks: dict[int, str], prefer_prompt_from_data: bool = False) -> str:
     if "prompt" in data and prefer_prompt_from_data:
         return data["prompt"]

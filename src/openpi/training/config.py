@@ -123,8 +123,8 @@ class DataConfig:
     # episodes index to use for training 
     episodes_index : List[int] | None = None
 
-    # Skill descriptions to ban from the prompt
-    undersampled_skill_descriptions: dict[str, float] | None = None
+    # Skill descriptions to resample
+    resampled_skill_descriptions: dict[str, float] | None = None
 
     # Multiplier to oversample boundaries
     boundary_oversampling_factor: int = 1
@@ -819,7 +819,7 @@ _CONFIGS = [
                 proprio_dropout_dropout_whole_proprio_pct=1.0,
                 episodes_index=list(range(190)),  # Should take range(45) now? Or maybe 120, 165. Def never before seen. I am desperate after all... Or maybe just do turning_on_radio now? That is actually not a bad idea...
                 behavior_dataset_root="/vision/group/behavior/2025-challenge-demos",
-                undersampled_skill_descriptions={
+                resampled_skill_descriptions={
                     "move to": 0.3,
                     "pick up from": 0.5,
                 },
@@ -868,7 +868,7 @@ _CONFIGS = [
                 proprio_dropout_dropout_whole_proprio_pct=0.7,
                 episodes_index=list(range(190)),
                 behavior_dataset_root="/vision/group/behavior/2025-challenge-demos",
-                undersampled_skill_descriptions={
+                resampled_skill_descriptions={
                     "move to": 0.3,
                     "pick up from": 0.5,
                 },
@@ -918,7 +918,7 @@ _CONFIGS = [
                 proprio_dropout_dropout_whole_proprio_pct=0.6,
                 proprio_dropout_proprio_groups=[],
                 episodes_index=list(range(190)),  # Should take range(45) now? Or maybe 120, 165. Def never before seen. I am desperate after all... Or maybe just do turning_on_radio now? That is actually not a bad idea...
-                undersampled_skill_descriptions={
+                resampled_skill_descriptions={
                     "move to": 0.3,
                 },
                 behavior_dataset_root="/vision/group/behavior/2025-challenge-demos",
@@ -968,7 +968,7 @@ _CONFIGS = [
                 proprio_dropout_dropout_whole_proprio_pct=0.6,
                 proprio_dropout_proprio_groups=[],
                 episodes_index=(list(range(182)) + list(range(183, 190))),
-                undersampled_skill_descriptions={
+                resampled_skill_descriptions={
                     "move to": 0.6,
                 },
                 boundary_oversampling_factor=3,
@@ -998,7 +998,63 @@ _CONFIGS = [
     ),
 
     TrainConfig(
-        name="pi05_b1k_loading_the_car_boundaries",
+        name="pi05_b1k_oversample",
+        exp_name="openpi",
+        project_name="B1K",
+        model=pi0_config.Pi0Config(
+            pi05=True,
+            action_horizon=256,
+            paligemma_variant="gemma_2b_lora",
+            loss_weighting_strategy="original",
+            proprio_dropout_dropout_whole_proprio_pct=0.2,
+        ),
+        data=LeRobotB1KDataConfig(
+            repo_id="behavior-1k/2025-challenge-demos",
+            base_config=DataConfig(
+                tasks=[
+                    "moving_boxes_to_storage",  # 16
+                ],
+                prompt_from_task=True,
+                prompt_from_skill_annotations=False,
+                prompt_from_skill_annotations_use_base_prompt_pct=1.0,
+                proprio_dropout_dropout_whole_proprio_pct=0.6,
+                proprio_dropout_proprio_groups=[],
+                episodes_index=(list(range(182)) + list(range(183, 190))),
+                resampled_skill_descriptions={
+                    "move to": 1,
+                    "pick up from": 3,
+                    "place on": 3,
+                    "open door": 8,
+                },
+                boundary_oversampling_factor=2,
+                boundary_window_frames=50,
+                behavior_dataset_root="/vision/group/behavior/2025-challenge-demos",
+                prefer_prompt_from_data=False,
+            ),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_base/params"),
+        num_train_steps=50_000,
+        freeze_filter=pi0_config.Pi0Config(
+            pi05=True, action_horizon=256, paligemma_variant="gemma_2b_lora"
+        ).get_freeze_filter(),
+        lr_schedule=_optimizer.CosineDecaySchedule(
+            warmup_steps=2_000,
+            peak_lr=2e-5,
+            decay_steps=100_000,
+            decay_lr=2e-6,
+        ),
+        # The learning rate will be 1e-6 at the end of training (step 50,000).
+        ema_decay=None,
+        val_log_interval=5000,
+        val_repo_id="behavior-1k/2025-challenge-demos",
+        val_episodes_index=list(range(190, 200)),
+        assets_base_dir="./outputs/assets",
+        checkpoint_base_dir="./outputs/checkpoints",
+        num_workers=16,
+    ),
+
+    TrainConfig(
+        name="pi05_b1k_loading_the_car_boundaries_but_less",
         exp_name="openpi",
         project_name="B1K",
         model=pi0_config.Pi0Config(
@@ -1020,11 +1076,9 @@ _CONFIGS = [
                 proprio_dropout_dropout_whole_proprio_pct=0.6,
                 proprio_dropout_proprio_groups=[],
                 episodes_index=list(range(190)),
-                undersampled_skill_descriptions={
-                    "move to": 0.6,
-                },
-                boundary_oversampling_factor=3,
-                boundary_window_frames=40,
+                resampled_skill_descriptions=None,
+                boundary_oversampling_factor=2,
+                boundary_window_frames=30,
                 behavior_dataset_root="/vision/group/behavior/2025-challenge-demos",
                 prefer_prompt_from_data=False,
             ),
@@ -1072,7 +1126,7 @@ _CONFIGS = [
                 proprio_dropout_dropout_whole_proprio_pct=0.6,
                 proprio_dropout_proprio_groups=[],
                 episodes_index=list(range(190)),  # Should take range(45) now? Or maybe 120, 165. Def never before seen. I am desperate after all... Or maybe just do turning_on_radio now? That is actually not a bad idea...
-                undersampled_skill_descriptions=None,
+                resampled_skill_descriptions=None,
                 behavior_dataset_root="/vision/group/behavior/2025-challenge-demos",
                 prefer_prompt_from_data=False,
             ),
@@ -1120,7 +1174,7 @@ _CONFIGS = [
                 proprio_dropout_dropout_whole_proprio_pct=0.6,
                 proprio_dropout_proprio_groups=[],
                 episodes_index=(list(range(182)) + list(range(183, 190))),
-                undersampled_skill_descriptions={
+                resampled_skill_descriptions={
                     "move to": 0.6,
                 },
                 boundary_oversampling_factor=3,
@@ -1173,7 +1227,7 @@ _CONFIGS = [
                 proprio_dropout_proprio_groups=[],
                 episodes_index=list(range(190)),  # Should take range(45) now? Or maybe 120, 165. Def never before seen. I am desperate after all... Or maybe just do turning_on_radio now? That is actually not a bad idea...
                 behavior_dataset_root="/vision/group/behavior/2025-challenge-demos",
-                undersampled_skill_descriptions=None,
+                resampled_skill_descriptions=None,
                 prefer_prompt_from_data=False,
             ),
         ),
@@ -1259,7 +1313,7 @@ _CONFIGS = [
                 ],
                 episodes_index=list(range(190)),  # Should take range(45) now? Or maybe 120, 165. Def never before seen. I am desperate after all... Or maybe just do turning_on_radio now? That is actually not a bad idea...
                 behavior_dataset_root="/vision/group/behavior/2025-challenge-demos",
-                undersampled_skill_descriptions={
+                resampled_skill_descriptions={
                     "move to": 0.5,
                     "pick up from": 0.5,
                 },

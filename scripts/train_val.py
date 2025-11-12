@@ -79,7 +79,7 @@ def _prepare_validation_config(
             prompt_from_skill_annotations=False,
             prompt_from_skill_annotations_use_base_prompt_pct=0.0,
             prefer_prompt_from_data=False,
-            undersampled_skill_descriptions=None,
+            resampled_skill_descriptions=None,
             boundary_oversampling_factor=1,
             boundary_window_frames=0,
         )
@@ -121,7 +121,7 @@ def _create_validation_data_loader(
             for batch in self._torch_data_loader:
                 yield _model.Observation.from_dict(batch), batch["actions"]
 
-    val_dataset = _data_loader.create_behavior_dataset(actual_val_data_config, val_config.model.action_horizon)
+    val_dataset = _data_loader.create_behavior_dataset(actual_val_data_config, val_config.model.action_horizon, val_config.checkpoint_dir)
     logging.info(f"Validation dataset created for {actual_val_data_config.repo_id}")
     val_dataset = _data_loader.transform_dataset(
         val_dataset, actual_val_data_config, skip_norm_stats=not use_norm_stats
