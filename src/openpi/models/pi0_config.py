@@ -44,6 +44,10 @@ class Pi0Config(_model.BaseModelConfig):
 
     proprio_dropout_dropout_whole_proprio_pct: float = 0.0  # eval time proprio dropout probability
 
+    # Task conditioning configuration
+    num_tasks: int = 0  # Number of tasks for task embeddings (0 = disabled, 50 for BEHAVIOR)
+    task_embedding_scale: float = 1.0  # Scale factor for task embedding contribution to time conditioning
+
     def __post_init__(self):
         if self.max_token_len is None:
             object.__setattr__(self, "max_token_len", 200 if self.pi05 else 48)
@@ -81,6 +85,7 @@ class Pi0Config(_model.BaseModelConfig):
                     "right_wrist_0_rgb": image_mask_spec,
                 },
                 state=jax.ShapeDtypeStruct([batch_size, self.action_dim], jnp.float32),
+                task_id=jax.ShapeDtypeStruct([batch_size], jnp.int32) if self.num_tasks > 0 else None,
                 tokenized_prompt=jax.ShapeDtypeStruct([batch_size, self.max_token_len], jnp.int32),
                 tokenized_prompt_mask=jax.ShapeDtypeStruct([batch_size, self.max_token_len], bool),
             )

@@ -310,7 +310,7 @@ class ExtractFASTActions(DataTransformFn):
 
 
 def prefix_task_index_to_prompt(task_index: int, prompt: str) -> str:
-    return f"[task-{task_index:02d}]: {prompt}"
+    return f"[{task_index:02d}] {prompt}"
 
 
 def get_prompt_from_task_or_data(data: int, tasks: dict[int, str], prefer_prompt_from_data: bool = False) -> str:
@@ -379,6 +379,16 @@ class PromptFromSkillAnnotations(DataTransformFn):
             return {**data, "prompt": get_prompt_from_task_or_data(data, self.tasks, self.prefer_prompt_from_data)}
         else:
             return {**data, "prompt": skill_prompts[prompt_idx]["prompt"]}
+
+
+@dataclasses.dataclass(frozen=True)
+class ExtractTaskID(DataTransformFn):
+    """Extracts task_id from task_index for task embeddings."""
+
+    def __call__(self, data: DataDict) -> DataDict:
+        if "task_index" in data:
+            return {**data, "task_id": np.array([int(data["task_index"])], dtype=np.int32)}
+        return data
 
 
 @dataclasses.dataclass(frozen=True)

@@ -162,6 +162,8 @@ def create_behavior_dataset(data_config: _config.DataConfig, action_horizon: int
             prefer_prompt_from_data=data_config.prefer_prompt_from_data,
         )])
 
+    dataset = TransformedDataset(dataset, [_transforms.ExtractTaskID()])
+
     return dataset
 
 

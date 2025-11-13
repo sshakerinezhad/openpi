@@ -87,9 +87,13 @@ class Pi0(_model.BaseModel):
         self.loss_weighting_strategy = config.loss_weighting_strategy
         self.action_groups = config.action_groups
         self.group_weights = config.group_weights
+        self.num_tasks = config.num_tasks
+        self.task_embedding_scale = config.task_embedding_scale
         logger.info(f"Loss weighting strategy: {self.loss_weighting_strategy}")
         logger.info(f"Action groups: {self.action_groups}")
         logger.info(f"Group weights: {self.group_weights}")
+        if self.num_tasks > 0:
+            logger.info(f"Task embeddings enabled: {self.num_tasks} tasks, scale={self.task_embedding_scale}")
         paligemma_config = _gemma.get_config(config.paligemma_variant)
         action_expert_config = _gemma.get_config(config.action_expert_variant)
         # TODO: rewrite gemma in NNX. For now, use bridge.
@@ -121,6 +125,10 @@ class Pi0(_model.BaseModel):
             self.action_time_mlp_in = nnx.Linear(2 * action_expert_config.width, action_expert_config.width, rngs=rngs)
             self.action_time_mlp_out = nnx.Linear(action_expert_config.width, action_expert_config.width, rngs=rngs)
         self.action_out_proj = nnx.Linear(action_expert_config.width, config.action_dim, rngs=rngs)
+
+        # Task embeddings for explicit task conditioning
+        if config.num_tasks > 0:
+            self.task_embeddings = nnx.Embed(config.num_tasks, action_expert_config.width, rngs=rngs)
 
         # This attribute gets automatically set by model.train() and model.eval().
         self.deterministic = True
@@ -189,6 +197,12 @@ class Pi0(_model.BaseModel):
         action_tokens = self.action_in_proj(noisy_actions)
         # embed timestep using sine-cosine positional encoding with sensitivity in the range [0, 1]
         time_emb = posemb_sincos(timestep, self.action_in_proj.out_features, min_period=4e-3, max_period=4.0)
+
+        # Add task embeddings to time conditioning (if enabled and task_id provided)
+        if self.num_tasks > 0 and obs.task_id is not None:
+            task_emb = self.task_embeddings(obs.task_id)  # [B, emb]
+            time_emb = time_emb + self.task_embedding_scale * task_emb
+
         if self.pi05:
             # time MLP (for adaRMS)
             time_emb = self.time_mlp_in(time_emb)

@@ -13,6 +13,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import optax
+import orbax.checkpoint as ocp
 import tqdm_loggable.auto as tqdm
 import wandb
 
@@ -304,12 +305,31 @@ def init_wandb(config: _config.TrainConfig, *, resuming: bool, log_code: bool = 
 def _load_weights_and_validate(loader: _weight_loaders.WeightLoader, params_shape: at.Params) -> at.Params:
     """Loads and validates the weights. Returns a loaded subset of the weights."""
     loaded_params = loader.load(params_shape)
-    at.check_pytree_equality(expected=params_shape, got=loaded_params, check_shapes=True, check_dtypes=True)
 
-    # Remove jax.ShapeDtypeStruct from the loaded params. This makes sure that only the loaded params are returned.
-    return traverse_util.unflatten_dict(
+    # Filter out ShapeDtypeStruct (these are unloaded params that will be randomly initialized)
+    loaded_params_filtered = traverse_util.unflatten_dict(
         {k: v for k, v in traverse_util.flatten_dict(loaded_params).items() if not isinstance(v, jax.ShapeDtypeStruct)}
     )
+
+    # Check that loaded params are compatible (allows model to have extra params like task_embeddings)
+    at.check_pytree_equality(
+        expected=ocp.transform_utils.intersect_trees(params_shape, loaded_params_filtered),
+        got=loaded_params_filtered,
+        check_shapes=True,
+        check_dtypes=True
+    )
+
+    # Log which parameters are being randomly initialized (not in checkpoint)
+    flat_expected = set(traverse_util.flatten_dict(params_shape).keys())
+    flat_loaded = set(traverse_util.flatten_dict(loaded_params_filtered).keys())
+    missing_params = flat_expected - flat_loaded
+    if missing_params:
+        missing_keys = [".".join(map(str, k)) for k in sorted(missing_params)]
+        logging.info(f"Randomly initializing {len(missing_params)} parameter(s) not in checkpoint: {missing_keys[:5]}")
+        if len(missing_keys) > 5:
+            logging.info(f"  ... and {len(missing_keys) - 5} more")
+
+    return loaded_params_filtered
 
 
 @at.typecheck

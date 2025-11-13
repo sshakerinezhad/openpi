@@ -1060,9 +1060,11 @@ _CONFIGS = [
         model=pi0_config.Pi0Config(
             pi05=True,
             action_horizon=256,
-            paligemma_variant="gemma_2b_lora",
+            paligemma_variant="gemma_2b_lora_32",
             loss_weighting_strategy="original",
             proprio_dropout_dropout_whole_proprio_pct=0.2,
+            num_tasks=50,
+            task_embedding_scale=1.0,
         ),
         data=LeRobotB1KDataConfig(
             repo_id="behavior-1k/2025-challenge-demos",
@@ -1099,30 +1101,30 @@ _CONFIGS = [
                 episodes_index=list(range(190)),
                 resampled_skill_descriptions=None,
                 boundary_oversampling_factor=2,
-                boundary_window_frames=50,
+                boundary_window_frames=30,
                 behavior_dataset_root="/vision/group/behavior/2025-challenge-demos",
                 prefer_prompt_from_data=False,
             ),
         ),
         weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_base/params"),
-        num_train_steps=100_000,
+        num_train_steps=261_000,
         freeze_filter=pi0_config.Pi0Config(
-            pi05=True, action_horizon=256, paligemma_variant="gemma_2b_lora"
+            pi05=True, action_horizon=256, paligemma_variant="gemma_2b_lora_32"
         ).get_freeze_filter(),
+        # The learning rate will be 1e-6 at the end of training (step 500,000).
         lr_schedule=_optimizer.CosineDecaySchedule(
-            warmup_steps=2_000,
-            peak_lr=2e-5,
-            decay_steps=100_000,
-            decay_lr=2e-6,
+            warmup_steps=5_000,
+            peak_lr=1e-5,
+            decay_steps=261_000,
+            decay_lr=1e-6,
         ),
-        # The learning rate will be 1e-6 at the end of training (step 50,000).
         ema_decay=None,
         val_log_interval=5000,
         val_repo_id="behavior-1k/2025-challenge-demos",
         val_episodes_index=list(range(190, 200)),
         assets_base_dir="./outputs/assets",
         checkpoint_base_dir="./outputs/checkpoints",
-        num_workers=32,
+        num_workers=64,
     ),
 
     TrainConfig(

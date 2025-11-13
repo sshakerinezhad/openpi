@@ -96,6 +96,9 @@ class Observation(Generic[ArrayT]):
     # Proprioceptive visibility mask (optional, for dropout).
     proprio_visibility_mask: at.Float[ArrayT, "*b s"] | None = None
 
+    # Task ID for task-specific conditioning (optional).
+    task_id: at.Int[ArrayT, "*b"] | None = None
+
     # Tokenized prompt.
     tokenized_prompt: at.Int[ArrayT, "*b l"] | None = None
     # Tokenized prompt mask.
@@ -125,6 +128,7 @@ class Observation(Generic[ArrayT]):
             image_masks=data["image_mask"],
             state=data["state"],
             proprio_visibility_mask=data.get("proprio_visibility_mask"),
+            task_id=data.get("task_id"),
             tokenized_prompt=data.get("tokenized_prompt"),
             tokenized_prompt_mask=data.get("tokenized_prompt_mask"),
             token_ar_mask=data.get("token_ar_mask"),
@@ -205,6 +209,7 @@ def preprocess_observation(
         image_masks=out_masks,
         state=observation.state,
         proprio_visibility_mask=observation.proprio_visibility_mask,
+        task_id=observation.task_id,
         tokenized_prompt=observation.tokenized_prompt,
         tokenized_prompt_mask=observation.tokenized_prompt_mask,
         token_ar_mask=observation.token_ar_mask,
