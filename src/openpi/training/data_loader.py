@@ -127,7 +127,12 @@ class FakeDataset(Dataset):
         return self._num_samples
 
 
-def create_behavior_dataset(data_config: _config.DataConfig, action_horizon: int, checkpoint_dir: str) -> Dataset:
+def create_behavior_dataset(
+    data_config: _config.DataConfig,
+    action_horizon: int,
+    checkpoint_dir: str,
+    num_datapoints_seen: int = 0
+) -> Dataset:
     """Create a dataset for training."""
     from omnigibson.learning.datas.lerobot_dataset import BehaviorLeRobotDataset
     
@@ -147,6 +152,7 @@ def create_behavior_dataset(data_config: _config.DataConfig, action_horizon: int
         boundary_oversampling_factor=data_config.boundary_oversampling_factor,
         boundary_window_frames=data_config.boundary_window_frames,
         checkpoint_dir=checkpoint_dir,
+        resume_step=num_datapoints_seen,
     )
 
     # Prefer skill annotations when requested; otherwise fall back to task->prompt mapping.
@@ -320,9 +326,10 @@ def create_behavior_data_loader(
     shuffle: bool = False,
     num_batches: int | None = None,
     skip_norm_stats: bool = False,
+    num_datapoints_seen: int = 0,
 ) -> DataLoader[tuple[_model.Observation, _model.Actions]]:
     data_config = config.data.create(config.assets_dirs, config.model)
-    dataset = create_behavior_dataset(data_config, action_horizon=config.model.action_horizon, checkpoint_dir=config.checkpoint_dir)
+    dataset = create_behavior_dataset(data_config, action_horizon=config.model.action_horizon, checkpoint_dir=config.checkpoint_dir, num_datapoints_seen=num_datapoints_seen)
     dataset = transform_dataset(dataset, data_config, skip_norm_stats=skip_norm_stats)
 
     # IMPORTANT: BehaviorLeRobotDataset imports OmniGibson which has global state and signal handlers.

@@ -472,11 +472,24 @@ def main(config: _config.TrainConfig):
     )
     init_wandb(config, resuming=resuming, enabled=config.wandb_enabled)
 
+    train_state, train_state_sharding = init_train_state(config, init_rng, mesh, resume=resuming)
+    jax.block_until_ready(train_state)
+    logging.info(f"Initialized train state:\n{training_utils.array_tree_to_info(train_state.params)}")
+
+    if resuming:
+        # We can pass in data_loader=None because it doesn't actually get used
+        train_state = _checkpoints.restore_state(checkpoint_manager, train_state, data_loader=None)
+
+    start_step = int(train_state.step)
+    batch_size = config.batch_size
+    num_datapoints_seen = start_step * batch_size
+    logging.info(f"Starting from step {start_step} with {num_datapoints_seen} datapoints seen")
     data_loader = _data_loader.create_behavior_data_loader(
         config,
         sharding=data_sharding,
         shuffle=True,
-        skip_norm_stats=False
+        skip_norm_stats=False,
+        num_datapoints_seen=num_datapoints_seen,
     )
     data_iter = iter(data_loader)
     batch = next(data_iter)
@@ -489,13 +502,6 @@ def main(config: _config.TrainConfig):
     ]
     wandb.log({"camera_views": images_to_log}, step=0)
 
-    train_state, train_state_sharding = init_train_state(config, init_rng, mesh, resume=resuming)
-    jax.block_until_ready(train_state)
-    logging.info(f"Initialized train state:\n{training_utils.array_tree_to_info(train_state.params)}")
-
-    if resuming:
-        train_state = _checkpoints.restore_state(checkpoint_manager, train_state, data_loader)
-
     ptrain_step = jax.jit(
         functools.partial(train_step, config),
         in_shardings=(replicated_sharding, train_state_sharding, data_sharding),
@@ -503,7 +509,6 @@ def main(config: _config.TrainConfig):
         donate_argnums=(1,),
     )
 
-    start_step = int(train_state.step)
     pbar = tqdm.tqdm(
         range(start_step, config.num_train_steps),
         initial=start_step,

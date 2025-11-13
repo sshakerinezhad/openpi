@@ -1,6 +1,7 @@
 #!/bin/bash
 
-EXP_NAME="openpi_05_$(date +%Y%m%d_%H%M%S)"
+# EXP_NAME="openpi_05_$(date +%Y%m%d_%H%M%S)"
+EXP_NAME="openpi_05_20251113_045215"
 echo "Experiment name: $EXP_NAME"
 
 CKPT_TO_CONTINUE="outputs/checkpoints/pi05_b1k_22_TASKS_oversample/openpi_05_20251113_045215/17000"
@@ -10,5 +11,5 @@ CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 XLA_PYTHON_CLIENT_MEM_FRACTION=0.92 OMNIGIB
     --exp_name="$EXP_NAME" \
     --resume \
     --batch_size=256 \
-    --weight_loader.params_path=$CKPT_TO_CONTINUE/params \
+    --weight_loader.params_path=gs://openpi-assets/checkpoints/pi05_base/params \
     --val_log_interval=3000
