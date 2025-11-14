@@ -7,9 +7,9 @@ st.set_page_config(layout="wide")
 
 st.title("GPU Monitoring: NVIDIA-SMI")
 
-# Add refresh button
-if st.button("🔄 Refresh GPU Stats", type="primary"):
-    st.rerun()
+# # Add refresh button
+# if st.button("🔄 Refresh GPU Stats", type="primary"):
+#     st.rerun()
 
 # Get current GPU stats
 try:

@@ -527,14 +527,15 @@ class TorchDataLoader:
             sampler=sampler,
             num_workers=num_workers,
             multiprocessing_context=mp_context,
-            persistent_workers=False,  # Disabled to prevent deadlocks
+            # persistent_workers=False,  # Disabled to prevent deadlocks
+            persistent_workers=True,  # enabled to prevent worker restarts
             collate_fn=_collate_fn,
             worker_init_fn=_worker_init_fn,
             drop_last=True,
             generator=generator,
             prefetch_factor=8 if num_workers > 0 else None,  # Prefetch more batches to avoid stalls every 13-15 steps
             pin_memory=True,
-            timeout=300,  # 5 minutes - increased for resource-intensive workloads
+            timeout=1200,  # 20 minutes - increased for resource-intensive workloads
         )
 
     @property
