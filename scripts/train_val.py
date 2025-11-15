@@ -148,7 +148,7 @@ def _compute_validation_losses(
     train_state_sharding: jax.sharding.NamedSharding,
     replicated_sharding: jax.sharding.NamedSharding,
     config: _config.TrainConfig,
-) -> float | None:
+) -> tuple[float, at.Array] | None:
     """Compute validation losses over multiple batches."""
 
     # Define validation loss function (similar to train_step structure)
@@ -156,8 +156,8 @@ def _compute_validation_losses(
     def val_loss_fn(
         model: _model.BaseModel, rng: at.KeyArrayLike, observation: _model.Observation, actions: _model.Actions
     ):
-        chunked_loss = model.compute_loss(rng, observation, actions, train=False)
-        return jnp.mean(chunked_loss)
+        chunked_loss, per_dim_loss = model.compute_loss(rng, observation, actions, train=False, return_per_dim=True)
+        return jnp.mean(chunked_loss), per_dim_loss
 
     def validation_step(state, batch, rng):
         """Single validation step, aligned with train_step structure."""
@@ -178,6 +178,7 @@ def _compute_validation_losses(
 
     val_iter = None
     losses = []
+    per_dim_losses_list = []
     # Use a separate RNG for validation to avoid interference with training RNG,
     # the specific seed offset is arbitrary.
     val_rng = jax.random.key(config.seed + 1000)
@@ -192,8 +193,11 @@ def _compute_validation_losses(
 
             try:
                 with sharding.set_mesh(mesh):
-                    loss = pvalidation_step(train_state, batch, val_rng)
+                    loss, per_dim_loss = pvalidation_step(train_state, batch, val_rng)
                 losses.append(jax.device_get(loss))
+                # Compute per-dimension loss statistics (mean over batch and horizon)
+                per_dim_loss_mean = jnp.mean(per_dim_loss, axis=(0, 1))  # [D]
+                per_dim_losses_list.append(jax.device_get(per_dim_loss_mean))
             except (RuntimeError, ValueError) as e:
                 logging.warning("Error computing validation loss for batch %d: %s", batch_idx, e)
                 continue
@@ -205,7 +209,11 @@ def _compute_validation_losses(
     if not losses:
         return None
 
-    return float(jnp.mean(jnp.array(losses)))
+    # Average losses across all validation batches
+    avg_loss = float(jnp.mean(jnp.array(losses)))
+    avg_per_dim_losses = jnp.mean(jnp.array(per_dim_losses_list), axis=0) if per_dim_losses_list else None
+
+    return avg_loss, avg_per_dim_losses
 
 
 def compute_validation_loss(
@@ -215,7 +223,7 @@ def compute_validation_loss(
     train_state_sharding: jax.sharding.NamedSharding,
     replicated_sharding: jax.sharding.NamedSharding,
     train_data_loader: _data_loader.DataLoader | None = None,
-) -> float | None:
+) -> tuple[float, at.Array] | None:
     """Compute average validation loss over a few batches. Downloads validation dataset if missing locally."""
     # Extract training normalization stats
     training_norm_stats = _extract_training_norm_stats(train_data_loader)
@@ -286,10 +294,14 @@ def init_wandb(config: _config.TrainConfig, *, resuming: bool, log_code: bool = 
     ckpt_dir = config.checkpoint_dir
     if not ckpt_dir.exists():
         raise FileNotFoundError(f"Checkpoint directory {ckpt_dir} does not exist.")
-    if resuming:
+
+    # Check if we should resume the W&B run or create a new one
+    if resuming and not config.force_new_wandb_run:
         run_id = (ckpt_dir / "wandb_id.txt").read_text().strip()
         wandb.init(id=run_id, resume="must", project=config.project_name)
     else:
+        if resuming and config.force_new_wandb_run:
+            logging.info("Creating new W&B run even when resuming (force_new_wandb_run=True)")
         wandb.init(
             name=config.exp_name,
             config=dataclasses.asdict(config),
@@ -447,6 +459,13 @@ def train_step(
     return new_state, info
 
 
+def truncate_per_dim_losses(per_dim_losses: at.Array) -> at.Array:
+    NUM_VALID_DIMS = 23
+    if per_dim_losses.shape[0] < NUM_VALID_DIMS:
+        logging.warning(f"Only {per_dim_losses.shape[0]} dimensions are valid, expected {NUM_VALID_DIMS}")
+    return per_dim_losses[:NUM_VALID_DIMS]
+
+
 def main(config: _config.TrainConfig):
     init_logging()
     logging.info(f"Running on: {platform.node()}")
@@ -544,19 +563,28 @@ def main(config: _config.TrainConfig):
 
             # Log per-dimension losses with descriptive names
             if per_dim_losses is not None:
+                per_dim_losses = truncate_per_dim_losses(per_dim_losses)
                 per_dim_dict = {f"loss/dim_{i}": float(per_dim_losses[i]) for i in range(per_dim_losses.shape[0])}
                 wandb.log(per_dim_dict, step=step)
 
             infos = []
         if step % config.val_log_interval == 0:
             logging.info("Computing validation loss at step %d", step)
-            val_loss = compute_validation_loss(
+            val_result = compute_validation_loss(
                 config, train_state, mesh, train_state_sharding, replicated_sharding, data_loader
             )
             logging.info("Done computing validation loss at step %d", step)
-            if val_loss is not None:
+            if val_result is not None:
+                val_loss, val_per_dim_losses = val_result
                 wandb.log({"val_loss": val_loss}, step=step)
                 logging.info("Validation loss at step %d: %.4f", step, val_loss)
+
+                # Log per-dimension validation losses
+                if val_per_dim_losses is not None:
+                    val_per_dim_losses = truncate_per_dim_losses(val_per_dim_losses)
+                    val_per_dim_dict = {f"val_loss/dim_{i}": float(val_per_dim_losses[i]) for i in range(val_per_dim_losses.shape[0])}
+                    wandb.log(val_per_dim_dict, step=step)
+
         batch = next(data_iter)
 
         if (step % config.save_interval == 0 and step > start_step) or step == config.num_train_steps - 1:

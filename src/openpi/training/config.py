@@ -609,6 +609,8 @@ class TrainConfig:
 
     # If true, will enable wandb logging.
     wandb_enabled: bool = True
+    # If true, will force creation of a new wandb run even when resuming from a checkpoint.
+    force_new_wandb_run: bool = False
 
     # Used to pass metadata to the policy server.
     policy_metadata: dict[str, Any] | None = None
@@ -1080,12 +1082,12 @@ _CONFIGS = [
                 "padding": (23, 32),        # padding dimensions
             },
             group_weights={
-                "base": 1.0,       # Reduce base importance
-                "trunk": 2.0,
-                "left_arm": 3.0,   # 3x more than base!
-                "left_gripper": 3.0,
-                "right_arm": 3.0,
-                "right_gripper": 3.0,
+                "base": 1.0,
+                "trunk": 1.7,
+                "left_arm": 1.5,
+                "left_gripper": 1.5,
+                "right_arm": 1.5,
+                "right_gripper": 1.5,
                 "padding": 0.0,
             },
             proprio_dropout_dropout_whole_proprio_pct=0.2,
@@ -1126,7 +1128,6 @@ _CONFIGS = [
                 proprio_dropout_proprio_groups=[],
                 episodes_index=list(range(190)),
                 resampled_skill_descriptions={
-                    "move to": 0.8,
                     "pick up from": 2,
                     "place in": 4,
                     "open door": 5,
@@ -1143,12 +1144,12 @@ _CONFIGS = [
         freeze_filter=pi0_config.Pi0Config(
             pi05=True, action_horizon=128, paligemma_variant="gemma_2b_lora_32"
         ).get_freeze_filter(),
-        # The learning rate will be 1e-6 at the end of training (step 500,000).
+        # The learning rate will be 1e-6 at the end of training (step 261,000).
         lr_schedule=_optimizer.CosineDecaySchedule(
             warmup_steps=5_000,
-            peak_lr=5e-6,
+            peak_lr=1e-5,
             decay_steps=261_000,
-            decay_lr=5e-7,
+            decay_lr=1e-6,
         ),
         ema_decay=None,
         val_log_interval=5000,
