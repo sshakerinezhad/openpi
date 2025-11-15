@@ -47,7 +47,6 @@ class Policy(BasePolicy):
                           Only relevant when is_pytorch=True.
             is_pytorch: Whether the model is a PyTorch model. If False, assumes JAX model.
         """
-        breakpoint()
         self._model = model
         self._input_transform = _transforms.compose(transforms)
         self._output_transform = _transforms.compose(output_transforms)

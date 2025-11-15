@@ -186,7 +186,7 @@ class B1KPolicyWrapper():
         # breakpoint()
         input_obs = self.process_obs(input_obs)
         if self.control_mode == 'receeding_temporal':
-            return self.act_receeding_temporal(input_obs)
+            return torch.from_numpy(self.act_receeding_temporal(input_obs))
         
         if self.control_mode == 'receeding_horizon':
             if len(self.action_queue) > 0:
@@ -240,6 +240,7 @@ class B1KPolicyWrapper():
 
             exp_weights = np.exp(k * np.arange(actions_current_timestep.shape[0]))
             exp_weights = exp_weights / exp_weights.sum()
+            # breakpoint()
 
             final_action = (actions_current_timestep * exp_weights[:, None]).sum(axis=0)
             final_action[-9] = target_joint_positions[0, -9]
