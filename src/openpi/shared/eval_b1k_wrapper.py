@@ -18,7 +18,6 @@ class B1KPolicyWrapper():
         config: _config.TrainConfig,
         text_prompt: str = "Turn on the radio receiver that's on the table in the living room.",
         control_mode: str = "temporal_ensemble",
-        max_actions_per_pred: int = 128,   # Truncate each prediction sequence to this length (UNUSED)
         replan_interval: int = 1,          # Steps between replanning (1=every step, 10=every 10, 50=rarely)
         max_predictions: int = 10,         # Max predictions to keep for averaging
         exp_k_value: float = 0.005,        # Exponential weighting factor (higher = favor recent more)
@@ -41,7 +40,6 @@ class B1KPolicyWrapper():
         # Core parameters
         self.replan_interval = replan_interval
         self.max_predictions = max_predictions
-        self.max_actions_per_pred = max_actions_per_pred
         self.exp_k_value = exp_k_value
         self.step_counter = 0
 
@@ -49,8 +47,8 @@ class B1KPolicyWrapper():
         # maxlen automatically drops oldest when full
         self.prediction_queue = deque([], maxlen=max_predictions)
 
-        # For error recovery
-        self.last_action = {"actions": np.zeros((max_actions_per_pred, 23), dtype=np.float64)}
+        # For error recovery (will be set after first inference)
+        self.last_action = None
 
         dataset_root = config.data.base_config.behavior_dataset_root
         self.task_prompt_map = {}
@@ -63,7 +61,7 @@ class B1KPolicyWrapper():
 
     def reset(self):
         self.prediction_queue = deque([], maxlen=self.max_predictions)
-        self.last_action = {"actions": np.zeros((self.max_actions_per_pred, 23), dtype=np.float64)}
+        self.last_action = None
         self.step_counter = 0
 
     def get_prompt_from_obs(self, obs: dict) -> str:
@@ -128,7 +126,7 @@ class B1KPolicyWrapper():
     def _act_temporal_ensemble(self, input_obs):
         """
         Unified implementation that handles all three modes:
-        - receeding_horizon: replan_interval=max_actions_per_pred, max_predictions=1
+        - receeding_horizon: replan_interval=large, max_predictions=1
         - receeding_temporal: replan_interval=10, max_predictions=5
         - temporal_ensemble: replan_interval=1, max_predictions=10
         """
@@ -143,12 +141,13 @@ class B1KPolicyWrapper():
                 action = self.policy.infer(batch)
                 self.last_action = action
             except Exception as e:
+                if self.last_action is None:
+                    raise RuntimeError("Policy inference failed on first call and no fallback available") from e
                 action = self.last_action
                 print(f"Error in action prediction, using last action: {traceback.format_exc()}")
-                # raise e
 
-            # Truncate and store as new prediction sequence
-            target_actions = action["actions"][:self.max_actions_per_pred].copy()
+            # Store as new prediction sequence
+            target_actions = action["actions"].copy()
             new_prediction = deque(target_actions)
             self.prediction_queue.append(new_prediction)  # Automatically drops oldest if full
 
@@ -224,7 +223,6 @@ class B1KPolicyWrapper():
 
         # Fast path for receeding_horizon to avoid unnecessary processing
         if (
-            self.replan_interval >= self.max_actions_per_pred and 
             self.max_predictions == 1 and
             len(self.prediction_queue) > 0 and 
             len(self.prediction_queue[0]) > 0
