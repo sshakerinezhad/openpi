@@ -50,10 +50,10 @@ def extract_skill_descriptions_with_frames(annotations_dir: str) -> tuple[Set[st
     task_skill_frame_counts = {}  # Track frames per task per skill description
 
     # Find all JSON files matching the pattern
-    ACCEPTABLE_TASKS = [26, 15, 14, 42, 44, 36, 3, 25, 34, 6, 13, 40, 49, 16, 1, 2, 22, 8, 30, 38, 39, 0]
+    # ACCEPTABLE_TASKS = [26, 15, 14, 42, 44, 36, 3, 25, 34, 6, 13, 40, 49, 16, 1, 2, 22, 8, 30, 38, 39, 0]
     # ACCEPTABLE_TASKS = [26, 14, 42, 44, 36, 3, 25, 34, 6, 13, 40, 49, 2, 22, 8, 30, 38, 39]
-    print(f"len(ACCEPTABLE_TASKS): {len(ACCEPTABLE_TASKS)}")
-    # ACCEPTABLE_TASKS = [1]
+    # print(f"len(ACCEPTABLE_TASKS): {len(ACCEPTABLE_TASKS)}")
+    ACCEPTABLE_TASKS = [2]
     json_files = []
     task_to_files = {}  # Track which files belong to which task
     for task_idx in ACCEPTABLE_TASKS:
