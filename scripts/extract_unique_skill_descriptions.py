@@ -30,7 +30,7 @@ def load_task_prompts(tasks_jsonl_path: str) -> Dict[int, Dict[str, str]]:
             }
     return tasks
 
-def extract_skill_descriptions_with_frames(annotations_dir: str) -> tuple[Set[str], Dict[str, int], Dict[int, int]]:
+def extract_skill_descriptions_with_frames(annotations_dir: str) -> tuple[Set[str], Dict[str, int], Dict[int, int], Dict[int, Dict[str, int]]]:
     """
     Read all JSON files in the annotations directory and extract unique skill descriptions
     along with the total number of frames dedicated to each skill.
@@ -39,17 +39,21 @@ def extract_skill_descriptions_with_frames(annotations_dir: str) -> tuple[Set[st
         annotations_dir: Path to the annotations directory
         
     Returns:
-        Tuple of (set of unique skill descriptions, dict mapping description to total frames, dict mapping task_idx to total frames)
+        Tuple of (set of unique skill descriptions, dict mapping description to total frames, 
+                 dict mapping task_idx to total frames, dict mapping task_idx to skill_description to frames)
     """
     index = 0
     unique_descriptions = set()
     frame_counts = {}
     skill_string_counts = Counter()
     task_frame_counts = {}  # Track frames per task
+    task_skill_frame_counts = {}  # Track frames per task per skill description
 
     # Find all JSON files matching the pattern
-    # ACCEPTABLE_TASKS = [26, 15, 14, 42, 44, 36, 3, 25, 34, 6, 13, 40, 49, 16, 1, 2, 22, 8, 30, 38, 39, 0]
-    ACCEPTABLE_TASKS = [1]
+    ACCEPTABLE_TASKS = [26, 15, 14, 42, 44, 36, 3, 25, 34, 6, 13, 40, 49, 16, 1, 2, 22, 8, 30, 38, 39, 0]
+    # ACCEPTABLE_TASKS = [26, 14, 42, 44, 36, 3, 25, 34, 6, 13, 40, 49, 2, 22, 8, 30, 38, 39]
+    print(f"len(ACCEPTABLE_TASKS): {len(ACCEPTABLE_TASKS)}")
+    # ACCEPTABLE_TASKS = [1]
     json_files = []
     task_to_files = {}  # Track which files belong to which task
     for task_idx in ACCEPTABLE_TASKS:
@@ -58,6 +62,7 @@ def extract_skill_descriptions_with_frames(annotations_dir: str) -> tuple[Set[st
         json_files.extend(files)
         task_to_files[task_idx] = files
         task_frame_counts[task_idx] = 0  # Initialize frame count for this task
+        task_skill_frame_counts[task_idx] = {}  # Initialize skill frame counts for this task
 
     print(f"Found {len(json_files)} JSON files to process")
 
@@ -105,6 +110,10 @@ def extract_skill_descriptions_with_frames(annotations_dir: str) -> tuple[Set[st
                                 frame_counts[description] = frame_counts.get(description, 0) + num_frames
                                 if current_task_idx is not None:
                                     task_frame_counts[current_task_idx] += num_frames
+                                    # Track per-task per-skill frame counts
+                                    if description not in task_skill_frame_counts[current_task_idx]:
+                                        task_skill_frame_counts[current_task_idx][description] = 0
+                                    task_skill_frame_counts[current_task_idx][description] += num_frames
                             # If fd is a list of lists (N pairs)
                             elif isinstance(fd, list) and all(isinstance(x, list) and len(x) == 2 for x in fd):
                                 for pair in fd:
@@ -113,6 +122,10 @@ def extract_skill_descriptions_with_frames(annotations_dir: str) -> tuple[Set[st
                                     frame_counts[description] = frame_counts.get(description, 0) + num_frames
                                     if current_task_idx is not None:
                                         task_frame_counts[current_task_idx] += num_frames
+                                        # Track per-task per-skill frame counts
+                                        if description not in task_skill_frame_counts[current_task_idx]:
+                                            task_skill_frame_counts[current_task_idx][description] = 0
+                                        task_skill_frame_counts[current_task_idx][description] += num_frames
                             else:
                                 raise ValueError(f"Unexpected frame_duration format: {fd}")
 
@@ -127,7 +140,7 @@ def extract_skill_descriptions_with_frames(annotations_dir: str) -> tuple[Set[st
     # for skill_string, count in skill_string_counts.items():
     #     print(f"{skill_string}: {count}")
 
-    return unique_descriptions, frame_counts, episode_lengths, task_frame_counts, ACCEPTABLE_TASKS
+    return unique_descriptions, frame_counts, episode_lengths, task_frame_counts, task_skill_frame_counts, ACCEPTABLE_TASKS
 
 
 def main():
@@ -139,7 +152,7 @@ def main():
     task_prompts = load_task_prompts(tasks_jsonl_path)
     
     print("Extracting unique skill descriptions...")
-    unique_descriptions, frame_counts, episode_lengths, task_frame_counts, acceptable_tasks = extract_skill_descriptions_with_frames(annotations_dir)
+    unique_descriptions, frame_counts, episode_lengths, task_frame_counts, task_skill_frame_counts, acceptable_tasks = extract_skill_descriptions_with_frames(annotations_dir)
     
     # Print task prompts
     print("\n" + "=" * 80)
@@ -160,6 +173,28 @@ def main():
         frames = task_frame_counts.get(task_idx, 0)
         print(f"Task {task_idx:3d} ({task_name:40s}): {frames:>12,} frames")
     print("=" * 80)
+    
+    # Print per-task per-skill frame counts
+    print("\nFRAME COUNTS PER SKILL DESCRIPTION FOR EACH TASK:")
+    print("=" * 120)
+    for task_idx in acceptable_tasks:
+        task_name = task_prompts[task_idx]['task_name'] if task_idx in task_prompts else f"task-{task_idx}"
+        task_total = task_frame_counts.get(task_idx, 0)
+        print(f"\nTask {task_idx}: {task_name} ({task_total:,} frames)")
+        print("-" * 120)
+        
+        if task_idx in task_skill_frame_counts:
+            skill_frames = task_skill_frame_counts[task_idx]
+            
+            # Sort by frame count (descending)
+            sorted_skills = sorted(skill_frames.items(), key=lambda x: x[1], reverse=True)
+            
+            for skill_desc, frames in sorted_skills:
+                percentage = (frames / task_total * 100) if task_total > 0 else 0
+                print(f"  {skill_desc:30s}  {frames:>12,} frames  ({percentage:5.2f}%)")
+        else:
+            print("  No skill data found")
+    print("=" * 120)
     
     print(f"\nFound {len(unique_descriptions)} unique skill descriptions:")
     print("=" * 80)
