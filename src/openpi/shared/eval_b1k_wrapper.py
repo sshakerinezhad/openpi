@@ -16,21 +16,41 @@ class B1KPolicyWrapper():
         self, 
         policy: BasePolicy,
         config: _config.TrainConfig,
-        text_prompt : str = "Turn on the radio receiver that's on the table in the living room.",
-        control_mode : str = "temporal_ensemble",
-        action_horizon : int = 10,
+        text_prompt: str = "Turn on the radio receiver that's on the table in the living room.",
+        control_mode: str = "temporal_ensemble",
+        max_actions_per_pred: int = 128,   # Truncate each prediction sequence to this length (UNUSED)
+        replan_interval: int = 1,          # Steps between replanning (1=every step, 10=every 10, 50=rarely)
+        max_predictions: int = 10,         # Max predictions to keep for averaging
+        exp_k_value: float = 0.005,        # Exponential weighting factor (higher = favor recent more)
     ) -> None:
         self.policy = policy
         self.text_prompt = text_prompt
         self.control_mode = control_mode
-        self.action_queue = deque([], maxlen=action_horizon)
-        self.last_action = {"actions": np.zeros((action_horizon, 23), dtype=np.float64)}
-        self.action_horizon = action_horizon
-        
-        self.replan_interval = action_horizon # K: replan every 10 steps
-        self.max_len = 50                     # how long the policy sequences are
-        self.temporal_ensemble_max = 5        # max number of sequences to ensemble
+
+        if control_mode == "receeding_horizon":
+            assert max_predictions == 1, "If you are using receeding_horizon, you only take 1 prediction at a time, there is no ensembling (averaging) of predictions"
+        elif control_mode == "temporal_ensemble":
+            assert replan_interval == 1, "If you are using temporal_ensemble, you need to replan every step"
+            assert max_predictions > 1, "If you are using temporal_ensemble, you need to keep at least 2 predictions for ensembling, otherwise this is just receeding_horizon with predicting 1 step at a time"
+        elif control_mode == "receeding_temporal":
+            assert replan_interval > 1, "If you are using receeding_temporal, you need to replan more than one step at a time, otherwise this is just temporal_ensemble"
+            assert max_predictions > 1, "If you are using receeding_temporal, you need to keep at least 2 predictions for ensembling, otherwise this is just receeding_horizon"
+        else:
+            raise ValueError(f"Invalid control mode: {control_mode}")
+
+        # Core parameters
+        self.replan_interval = replan_interval
+        self.max_predictions = max_predictions
+        self.max_actions_per_pred = max_actions_per_pred
+        self.exp_k_value = exp_k_value
         self.step_counter = 0
+
+        # Queue of prediction sequences (each is a deque of actions)
+        # maxlen automatically drops oldest when full
+        self.prediction_queue = deque([], maxlen=max_predictions)
+
+        # For error recovery
+        self.last_action = {"actions": np.zeros((max_actions_per_pred, 23), dtype=np.float64)}
 
         dataset_root = config.data.base_config.behavior_dataset_root
         self.task_prompt_map = {}
@@ -42,8 +62,8 @@ class B1KPolicyWrapper():
                     self.task_prompt_map[task["task_index"]] = task["task"]
 
     def reset(self):
-        self.action_queue = deque([],maxlen=self.action_horizon)
-        self.last_action = {"actions": np.zeros((self.action_horizon, 23), dtype=np.float64)}
+        self.prediction_queue = deque([], maxlen=self.max_predictions)
+        self.last_action = {"actions": np.zeros((self.max_actions_per_pred, 23), dtype=np.float64)}
         self.step_counter = 0
 
     def get_prompt_from_obs(self, obs: dict) -> str:
@@ -89,23 +109,35 @@ class B1KPolicyWrapper():
         }
         return processed_obs
     
-    def act_receeding_temporal(self, input_obs):
-        # Step 1: check if we should re-run policy
-        if self.step_counter % self.replan_interval == 0:
-            # Run policy every K steps
-            nbatch = copy.deepcopy(input_obs)
-            if nbatch["observation"].shape[-1] != 3:
-                nbatch["observation"] = np.transpose(nbatch["observation"], (0, 1, 3, 4, 2))
+    def _prepare_batch(self, input_obs):
+        """Extract and format observation for policy inference"""
+        nbatch = copy.deepcopy(input_obs)
+        if nbatch["observation"].shape[-1] != 3:
+            nbatch["observation"] = np.transpose(nbatch["observation"], (0, 1, 3, 4, 2))
 
-            joint_positions = nbatch["proprio"][0]
-            batch = {
-                "observation/egocentric_camera": nbatch["observation"][0, 0],
-                "observation/wrist_image_left": nbatch["observation"][0, 1],
-                "observation/wrist_image_right": nbatch["observation"][0, 2],
-                "observation/state": joint_positions,
-                "prompt": input_obs["prompt"],
-                "task_index": input_obs["task_index"],
-            }
+        joint_positions = nbatch["proprio"][0]
+        return {
+            "observation/egocentric_camera": nbatch["observation"][0, 0],
+            "observation/wrist_image_left": nbatch["observation"][0, 1],
+            "observation/wrist_image_right": nbatch["observation"][0, 2],
+            "observation/state": joint_positions,
+            "prompt": input_obs["prompt"],
+            "task_index": input_obs["task_index"],
+        }
+
+    def _act_temporal_ensemble(self, input_obs):
+        """
+        Unified implementation that handles all three modes:
+        - receeding_horizon: replan_interval=max_actions_per_pred, max_predictions=1
+        - receeding_temporal: replan_interval=10, max_predictions=5
+        - temporal_ensemble: replan_interval=1, max_predictions=10
+        """
+        # Step 1: Check if we should replan
+        should_replan = (self.step_counter % self.replan_interval == 0)
+
+        if should_replan:
+            # Run policy inference
+            batch = self._prepare_batch(input_obs)
 
             try:
                 action = self.policy.infer(batch)
@@ -113,50 +145,54 @@ class B1KPolicyWrapper():
             except Exception as e:
                 action = self.last_action
                 print(f"Error in action prediction, using last action: {traceback.format_exc()}")
+                # raise e
 
-            target_joint_positions = action["actions"].copy()
+            # Truncate and store as new prediction sequence
+            target_actions = action["actions"][:self.max_actions_per_pred].copy()
+            new_prediction = deque(target_actions)
+            self.prediction_queue.append(new_prediction)  # Automatically drops oldest if full
 
-            # Add this sequence to action queue
-            new_seq = deque([a for a in target_joint_positions[:self.max_len]])
-            self.action_queue.append(new_seq)
+        # Step 2: Extract current action from all stored predictions
+        if len(self.prediction_queue) == 0:
+            raise ValueError("Prediction queue is empty - this shouldn't happen!")
 
-            # Optional: limit memory
-            while len(self.action_queue) > self.temporal_ensemble_max:
-                self.action_queue.popleft()
+        # Get next action from each prediction
+        actions_to_average = []
+        for pred_seq in self.prediction_queue:
+            if len(pred_seq) > 0:
+                actions_to_average.append(pred_seq.popleft())
 
-        # Step 2: Smooth across current step from all stored sequences
-        if len(self.action_queue) == 0:
-            raise ValueError("Action queue empty in receeding_temporal mode.")
+        # Remove exhausted predictions
+        self.prediction_queue = deque(
+            [seq for seq in self.prediction_queue if len(seq) > 0],
+            maxlen=self.max_predictions
+        )
 
-        actions_current_timestep = np.empty((len(self.action_queue), self.action_queue[0][0].shape[0]))
+        # Step 3: Average with exponential weighting
+        if len(actions_to_average) == 1:
+            # No averaging needed
+            final_action = actions_to_average[0]
+        else:
+            actions_array = np.array(actions_to_average)
 
-        for i in range(len(self.action_queue)):
-            actions_current_timestep[i] = self.action_queue[i].popleft()
+            # Compute exponential weights (older=lower weight, newer=higher weight)
+            exp_weights = np.exp(self.exp_k_value * np.arange(len(actions_to_average)))
+            exp_weights = exp_weights / exp_weights.sum()
 
-        # Drop exhausted sequences
-        self.action_queue = deque([q for q in self.action_queue if len(q) > 0])
+            # Weighted average
+            final_action = (actions_array * exp_weights[:, None]).sum(axis=0)
 
-        # Apply temporal ensemble
-        k = 0.005
-        exp_weights = np.exp(k * np.arange(actions_current_timestep.shape[0]))
-        exp_weights = exp_weights / exp_weights.sum()
-
-        final_action = (actions_current_timestep * exp_weights[:, None]).sum(axis=0)
-
-        # Preserve grippers from most recent rollout
-        final_action[-9] = actions_current_timestep[0, -9]
-        final_action[-1] = actions_current_timestep[0, -1]
-        final_action = final_action[None]
+            # Override gripper channels with newest prediction
+            final_action[-9] = actions_to_average[-1][-9]
+            final_action[-1] = actions_to_average[-1][-1]
 
         self.step_counter += 1
-
-        return final_action
-
+        return final_action[None]
 
     def act(self, input_obs):
-        # TODO reformat data into the correct format for the model
-        # TODO: communicate with justin that we are using numpy to pass the data. Also we are passing in uint8 for images 
         """
+        Main action selection method. Uses unified temporal ensemble algorithm.
+        
         Model input expected: 
             📌 Key: observation/exterior_image_1_left
             Type: ndarray
@@ -183,69 +219,21 @@ class B1KPolicyWrapper():
             Dtype: float64
             Shape: (10, 16)
         """
-        # breakpoint()
+        # Process observation
         input_obs = self.process_obs(input_obs)
-        if self.control_mode == 'receeding_temporal':
-            return torch.from_numpy(self.act_receeding_temporal(input_obs))
-        
-        if self.control_mode == 'receeding_horizon':
-            if len(self.action_queue) > 0:
-                # pop the first action in the queue
-                final_action = self.action_queue.popleft()[None]
-                return torch.from_numpy(final_action)
-        
-        nbatch = copy.deepcopy(input_obs)
-        if nbatch["observation"].shape[-1] != 3: 
-            # make B, num_cameras, H, W, C  from B, num_cameras, C, H, W
-            # permute if pytorch
-            nbatch["observation"] = np.transpose(nbatch["observation"], (0, 1, 3, 4, 2))
 
-        # nbatch["proprio"] is B, 16, where B=1
-        joint_positions = nbatch["proprio"][0]
-        batch = {
-            "observation/egocentric_camera": nbatch["observation"][0, 0],
-            "observation/wrist_image_left": nbatch["observation"][0, 1],
-            "observation/wrist_image_right": nbatch["observation"][0, 2],
-            "observation/state": joint_positions,
-            "prompt": nbatch["prompt"],
-            "task_index": nbatch["task_index"],
-        }
-        # print(f"batch['prompt']: {batch['prompt']}")
+        # Fast path for receeding_horizon to avoid unnecessary processing
+        if (
+            self.replan_interval >= self.max_actions_per_pred and 
+            self.max_predictions == 1 and
+            len(self.prediction_queue) > 0 and 
+            len(self.prediction_queue[0]) > 0
+        ):
+            # Still have actions in queue, just pop and return
+            action = self.prediction_queue[0].popleft()
+            self.step_counter += 1
+            return torch.from_numpy(action[None])
 
-        try:
-            action = self.policy.infer(batch) 
-            self.last_action = action
-        except Exception as e:
-            action = self.last_action
-            raise e
-        # convert to absolute action and append gripper command
-        # action shape: (10, 23), joint_positions shape: (23,)
-        # Need to broadcast joint_positions to match action sequence length
-        target_joint_positions = action["actions"].copy() 
-        if self.control_mode == 'receeding_horizon':
-            self.action_queue = deque([a for a in target_joint_positions[:self.max_len]])
-            final_action = self.action_queue.popleft()[None]
-
-        # # temporal emsemble start
-        elif self.control_mode == 'temporal_ensemble':
-            # breakpoint()
-            new_actions = deque(target_joint_positions)
-            self.action_queue.append(new_actions)
-            actions_current_timestep = np.empty((len(self.action_queue), target_joint_positions.shape[1]))
-            
-            # k = 0.01
-            k = 0.005
-            for i, q in enumerate(self.action_queue):
-                actions_current_timestep[i] = q.popleft()
-
-            exp_weights = np.exp(k * np.arange(actions_current_timestep.shape[0]))
-            exp_weights = exp_weights / exp_weights.sum()
-            # breakpoint()
-
-            final_action = (actions_current_timestep * exp_weights[:, None]).sum(axis=0)
-            final_action[-9] = target_joint_positions[0, -9]
-            final_action[-1] = target_joint_positions[0, -1]
-            final_action = final_action[None]
-        else:
-            final_action = target_joint_positions
+        # General path: unified temporal ensemble
+        final_action = self._act_temporal_ensemble(input_obs)
         return torch.from_numpy(final_action)
