@@ -86,7 +86,16 @@ def main(args: Args) -> None:
     if args.record:
         policy = _policy.PolicyRecorder(policy, "policy_records")
 
-    policy = B1KPolicyWrapper(policy, config=config, text_prompt="Hello, world!", control_mode=args.control_mode, max_len=args.max_len, action_horizon=args.action_horizon, temporal_ensemble_max=args.temporal_ensemble_max, exp_k_value=args.exp_k_value)
+    policy = B1KPolicyWrapper(
+        policy,
+        config=config,
+        text_prompt="Hello, world!",
+        # control_mode=args.control_mode,
+        # max_len=args.max_len,
+        # action_horizon=args.action_horizon,
+        # temporal_ensemble_max=args.temporal_ensemble_max,
+        # exp_k_value=args.exp_k_value,
+    )
 
     hostname = socket.gethostname()
     local_ip = socket.gethostbyname(hostname)

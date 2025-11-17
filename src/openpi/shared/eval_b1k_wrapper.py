@@ -53,7 +53,14 @@ class B1KPolicyWrapper():
                 "max_len": 72,
                 "action_horizon": 12,
                 "temporal_ensemble_max": 6,
-                "exp_k_value": 1.0,  # TODO: SHOULD THIS BE 1 OR PUT IT BACK TO 0.005 now?
+                "exp_k_value": 0.005,  # TODO: SHOULD THIS BE 1 OR PUT IT BACK TO 0.005 now?
+            },
+            "fine_higher_k": {
+                "control_mode": "receeding_temporal",
+                "max_len": 72,
+                "action_horizon": 12,
+                "temporal_ensemble_max": 6,
+                "exp_k_value": 0.8,
             },
         }
 
@@ -78,6 +85,7 @@ class B1KPolicyWrapper():
             15: "coarse",
             13: "coarse",
             16: "coarse",
+            22: "fine_higher_k",
         }
 
         dataset_root = config.data.base_config.behavior_dataset_root
