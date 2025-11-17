@@ -103,8 +103,10 @@ class B1KPolicyWrapper():
 
     def maybe_set_new_task(self, task_id: int):
         if task_id == self.current_task_id:
+            print(f"Task {task_id} already set, skipping")
             return
 
+        print(f"Setting new task {task_id}")
         self.current_task_id = task_id
         config_type = self.get_config_type(task_id)
         self.action_horizon = self.configs[config_type]["action_horizon"]
