@@ -52,7 +52,7 @@ class Args:
     # Dataset root, used to retrieve the prompt of the task if taskname is not None.
     dataset_root: str | None = "/scr/behavior/2025-challenge-demos"
     # If provided, will be used to retrieve the prompt of the task, otherwise use turning_on_radio as default.
-    task_name: str | None = None
+    # task_name: str | None = None
 
     # Port to serve the policy on.
     port: int = 8000

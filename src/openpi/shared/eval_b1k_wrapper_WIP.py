@@ -110,8 +110,7 @@ class B1KPolicyWrapper():
         return self.task_idx_config_type_map.get(task_id, "fine")
 
     def get_ckpt_path(self, task_id: int) -> str:
-        ckpt_sub_dir = self.task_idx_ckpt_path_map.get(task_id, "openpi_05_20251113_045215/81000")
-        return f"/workspace/openpi/outputs/checkpoints/{ckpt_sub_dir}"
+        return self.task_idx_ckpt_path_map.get(task_id, "openpi_05_20251113_045215/81000")
 
     def reset(self):
         self.action_queue = deque([],maxlen=self.action_horizon)
