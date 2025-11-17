@@ -60,7 +60,7 @@ class B1KPolicyWrapper():
                 "max_len": 72,
                 "action_horizon": 12,
                 "temporal_ensemble_max": 6,
-                "exp_k_value": 0.8,
+                "exp_k_value": 0.5,
             },
         }
 
@@ -82,11 +82,12 @@ class B1KPolicyWrapper():
         }
 
         self.task_idx_config_type_map = {
-            15: "coarse",
-            13: "coarse",
-            16: "coarse",
-            22: "fine_higher_k",
-        }
+            0: "coarse",  # turning_on_radio was eval'd with RH 50
+            15: "coarse",  # bringing_in_wood should be better with RH, but we got 0.0 anyway
+            13: "coarse",  # loading_the_car should be better with RH, but we got 0.0 anyway
+            16: "coarse",  # moving_boxes_to_storage was submitted with RH 50, so that's what we'll keep
+            22: "fine_higher_k",  # putting_shoes_on_rack was better with receeding_temporal with k=0.5
+        }  # For everything else, we'll default to `fine` which is receeding_temporal with k=0.005
 
         dataset_root = config.data.base_config.behavior_dataset_root
         self.task_prompt_map = {}
@@ -97,6 +98,9 @@ class B1KPolicyWrapper():
                     task = json.loads(line)
                     self.task_prompt_map[task["task_index"]] = task["task"]
 
+        # 16 is moving_boxes_to_storage, the "default" task
+        self.maybe_set_new_task(16)
+
     def maybe_set_new_task(self, task_id: int):
         if task_id == self.current_task_id:
             return
@@ -104,6 +108,7 @@ class B1KPolicyWrapper():
         self.current_task_id = task_id
         config_type = self.get_config_type(task_id)
         self.action_horizon = self.configs[config_type]["action_horizon"]
+        self.replan_interval = self.action_horizon
         self.max_len = self.configs[config_type]["max_len"]
         self.temporal_ensemble_max = self.configs[config_type]["temporal_ensemble_max"]
         self.exp_k_value = self.configs[config_type]["exp_k_value"]
@@ -115,10 +120,11 @@ class B1KPolicyWrapper():
         self.policy = create_policy(self.ckpt_path)
 
     def get_config_type(self, task_id: int) -> str:
-        return self.task_idx_config_type_map.get(task_id, "fine")
+        return self.task_idx_config_type_map.get(int(task_id), "fine")
 
     def get_ckpt_path(self, task_id: int) -> str:
-        ckpt_sub_dir = self.task_idx_ckpt_path_map.get(task_id, "openpi_05_20251113_045215/81000")
+        ckpt_sub_dir = self.task_idx_ckpt_path_map.get(int(task_id), "openpi_05_20251113_045215/81000")
+        print(f"task_id={task_id}, ckpt_sub_dir={ckpt_sub_dir}")
         return f"/workspace/openpi/outputs/checkpoints/{ckpt_sub_dir}"
 
     def reset(self):
