@@ -3,9 +3,7 @@ import torch
 import os
 import json
 from openpi.training import config as _config
-from openpi.policies import policy_config as _policy_config
 from openpi_client.base_policy import BasePolicy
-from openpi.policies import policy as _policy
 from openpi_client.image_tools import resize_with_pad
 from collections import deque
 import copy
@@ -13,72 +11,29 @@ import traceback
 
 RESIZE_SIZE = 224
 
-def create_policy(ckpt_dir: str) -> _policy.Policy:
-    """Create a policy from the given arguments."""
-    config = _config.get_config("pi05_b1k_inference_final")
-    return _policy_config.create_trained_policy(
-        config, ckpt_dir, default_prompt=None
-    )
-
-class B1KPolicyWrapper():
+class OGB1KPolicyWrapper():
     def __init__(
-        self,
+        self, 
         policy: BasePolicy,
         config: _config.TrainConfig,
         text_prompt : str = "Turn on the radio receiver that's on the table in the living room.",
+        control_mode : str = "temporal_ensemble",
+        action_horizon: int = 10,
+        max_len: int = 50,
+        temporal_ensemble_max: int = 5,
+        exp_k_value: float = 0.005,
     ) -> None:
         self.policy = policy
         self.text_prompt = text_prompt
-        self.current_task_id = None
-        # self.control_mode = control_mode
-        # self.action_queue = deque([], maxlen=action_horizon)
-        # self.last_action = {"actions": np.zeros((action_horizon, 23), dtype=np.float64)}
-        # self.action_horizon = action_horizon
-        # self.exp_k_value = exp_k_value
-        # self.max_len = max_len
-        # self.temporal_ensemble_max = temporal_ensemble_max
-        # self.replan_interval = action_horizon # K: replan every 10 steps
+        self.control_mode = control_mode
+        self.action_queue = deque([], maxlen=action_horizon)
+        self.last_action = {"actions": np.zeros((action_horizon, 23), dtype=np.float64)}
+        self.action_horizon = action_horizon
+        self.exp_k_value = exp_k_value
+        self.max_len = max_len
+        self.temporal_ensemble_max = temporal_ensemble_max
+        self.replan_interval = action_horizon # K: replan every 10 steps
         self.step_counter = 0
-
-        self.configs = {
-            "coarse": {
-                "control_mode": "receeding_horizon",
-                "max_len": 100,
-                "action_horizon": 100,
-                "temporal_ensemble_max": 1,
-                "exp_k_value": 1.0,
-            },
-            "fine": {
-                "control_mode": "receeding_temporal",
-                "max_len": 72,
-                "action_horizon": 12,
-                "temporal_ensemble_max": 6,
-                "exp_k_value": 1.0,  # TODO: SHOULD THIS BE 1 OR PUT IT BACK TO 0.005 now?
-            },
-        }
-
-        self.task_idx_ckpt_path_map = {
-            16: "openpi_05_20251115_045832/36000",               # moving_boxes_to_storage
-            22: "psor_openpi_05_20251116_062730/27000",          # putting_shoes_on_rack
-            15: "openpi_05_20251115_071839/15000",               # bringing_in_wood
-            42: "chop_an_onion_openpi_05_20251116_220711/9000",  # chop_an_onion
-            44: "cw_openpi_05_20251116_072941/15000",            # chopping_wood
-            6:  "hee_openpi_05_20251116_064228/18000",           # hiding_Easter_eggs
-            13: "ltc_openpi_05_20251116_073405/15000",           # loading_the_car
-            1:  "openpi_05_20251115_072623/21000",               # picking_up_trash
-            38: "sfb_openpi_05_20251116_065743/24000",           # spraying_for_bugs
-            39: "sft_openpi_05_20251116_070631/21000",           # spraying_fruit_trees
-            3:  "cupaf_openpi_05_20251116_073015/18000",         # cleaning_up_plates_and_food
-            0:  "openpi_05_20251115_050323/9000",                # turning_on_radio
-            8:  "rkf_openpi_05_20251116_220634/3000",            # rearranging_kitchen_furniture
-            2:  "pahd_openpi_05_20251116_073515/3000",           # putting_away_Halloween_decorations (lower stepcount)
-        }
-
-        self.task_idx_config_type_map = {
-            15: "coarse",
-            13: "coarse",
-            16: "coarse",
-        }
 
         dataset_root = config.data.base_config.behavior_dataset_root
         self.task_prompt_map = {}
@@ -88,29 +43,6 @@ class B1KPolicyWrapper():
                 for line in f:
                     task = json.loads(line)
                     self.task_prompt_map[task["task_index"]] = task["task"]
-
-    def maybe_set_new_task(self, task_id: int):
-        if task_id == self.current_task_id:
-            return
-
-        self.current_task_id = task_id
-        config_type = self.get_config_type(task_id)
-        self.action_horizon = self.configs[config_type]["action_horizon"]
-        self.max_len = self.configs[config_type]["max_len"]
-        self.temporal_ensemble_max = self.configs[config_type]["temporal_ensemble_max"]
-        self.exp_k_value = self.configs[config_type]["exp_k_value"]
-        self.control_mode = self.configs[config_type]["control_mode"]
-        self.action_queue = deque([], maxlen=self.action_horizon)
-        self.last_action = {"actions": np.zeros((self.action_horizon, 23), dtype=np.float64)}
-        self.step_counter = 0
-        self.ckpt_path = self.get_ckpt_path(task_id)
-        self.policy = create_policy(self.ckpt_path)
-
-    def get_config_type(self, task_id: int) -> str:
-        return self.task_idx_config_type_map.get(task_id, "fine")
-
-    def get_ckpt_path(self, task_id: int) -> str:
-        return self.task_idx_ckpt_path_map.get(task_id, "openpi_05_20251113_045215/81000")
 
     def reset(self):
         self.action_queue = deque([],maxlen=self.action_horizon)
@@ -208,6 +140,7 @@ class B1KPolicyWrapper():
         self.action_queue = deque([q for q in self.action_queue if len(q) > 0])
 
         # Apply temporal ensemble
+        print(f"self.exp_k_value: {self.exp_k_value}")
         exp_weights = np.exp(self.exp_k_value * np.arange(actions_current_timestep.shape[0]))
         exp_weights = exp_weights / exp_weights.sum()
 
@@ -252,9 +185,7 @@ class B1KPolicyWrapper():
             Dtype: float64
             Shape: (10, 16)
         """
-        # Check if new task and then set it if so
-        self.maybe_set_new_task(input_obs["task_id"])
-
+        # breakpoint()
         input_obs = self.process_obs(input_obs)
         if self.control_mode == 'receeding_temporal':
             return torch.from_numpy(self.act_receeding_temporal(input_obs))
