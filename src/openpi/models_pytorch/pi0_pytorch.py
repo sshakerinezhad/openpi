@@ -90,6 +90,8 @@ class PI0Pytorch(nn.Module):
         self.loss_weighting_strategy = getattr(config, "loss_weighting_strategy", "per_group")
         self.action_groups = getattr(config, "action_groups", None)
         self.group_weights = getattr(config, "group_weights", None)
+        self.num_tasks = getattr(config, "num_tasks", 0)
+        self.task_embedding_scale = getattr(config, "task_embedding_scale", 1.0)
 
         paligemma_config = _gemma.get_config(config.paligemma_variant)
         action_expert_config = _gemma.get_config(config.action_expert_variant)
@@ -101,16 +103,21 @@ class PI0Pytorch(nn.Module):
             precision=config.dtype,
         )
 
-        self.action_in_proj = nn.Linear(32, action_expert_config.width)
-        self.action_out_proj = nn.Linear(action_expert_config.width, 32)
+        self.action_in_proj = nn.Linear(config.action_dim, action_expert_config.width)
+        self.action_out_proj = nn.Linear(action_expert_config.width, config.action_dim)
 
         if self.pi05:
             self.time_mlp_in = nn.Linear(action_expert_config.width, action_expert_config.width)
             self.time_mlp_out = nn.Linear(action_expert_config.width, action_expert_config.width)
         else:
-            self.state_proj = nn.Linear(32, action_expert_config.width)
+            self.state_proj = nn.Linear(config.action_dim, action_expert_config.width)
             self.action_time_mlp_in = nn.Linear(2 * action_expert_config.width, action_expert_config.width)
             self.action_time_mlp_out = nn.Linear(action_expert_config.width, action_expert_config.width)
+
+        # Task embeddings for explicit task conditioning
+        if self.num_tasks > 0:
+            logging.info(f"Task embeddings enabled: {self.num_tasks} tasks, scale={self.task_embedding_scale}")
+            self.task_embeddings = nn.Embedding(self.num_tasks, action_expert_config.width)
 
         torch.set_float32_matmul_precision("high")
         self.sample_actions = torch.compile(self.sample_actions, mode="max-autotune")
@@ -171,6 +178,8 @@ class PI0Pytorch(nn.Module):
             observation.tokenized_prompt,
             observation.tokenized_prompt_mask,
             observation.state,
+            getattr(observation, "proprio_visibility_mask", None),
+            getattr(observation, "task_id", None),
         )
 
     def sample_noise(self, shape, device):
@@ -238,7 +247,7 @@ class PI0Pytorch(nn.Module):
 
         return embs, pad_masks, att_masks
 
-    def embed_suffix(self, state, noisy_actions, timestep):
+    def embed_suffix(self, state, noisy_actions, timestep, proprio_visibility_mask=None, task_id=None):
         """Embed state, noisy_actions, timestep to prepare for Expert Gemma processing."""
         embs = []
         pad_masks = []
@@ -258,7 +267,13 @@ class PI0Pytorch(nn.Module):
             bsize = state_emb.shape[0]
             device = state_emb.device
 
-            state_mask = torch.ones(bsize, 1, dtype=torch.bool, device=device)
+            # Check if we have a proprio visibility mask from ProprioDropout
+            if proprio_visibility_mask is not None:
+                # If ALL elements are masked (all zeros), mask out the entire state token
+                # Otherwise, keep the token valid (partially masked elements will contribute 0 after normalization)
+                state_mask = torch.any(proprio_visibility_mask, dim=-1, keepdim=True)  # [B, 1]
+            else:
+                state_mask = torch.ones(bsize, 1, dtype=torch.bool, device=device)
             pad_masks.append(state_mask)
 
             # Set attention masks so that image and language inputs do not attend to state or actions
@@ -269,6 +284,13 @@ class PI0Pytorch(nn.Module):
             timestep, self.action_in_proj.out_features, min_period=4e-3, max_period=4.0, device=timestep.device
         )
         time_emb = time_emb.type(dtype=timestep.dtype)
+
+        # Add task embeddings to time conditioning (if enabled and task_id provided)
+        if self.num_tasks > 0:
+            if task_id is None:
+                raise ValueError("Task ID is required for task embeddings")
+            task_emb = self.task_embeddings(task_id)  # [B, emb]
+            time_emb = time_emb + self.task_embedding_scale * task_emb
 
         # Fuse timestep + action information using an MLP
         def action_proj_func(noisy_actions):
@@ -317,9 +339,9 @@ class PI0Pytorch(nn.Module):
 
         return embs, pad_masks, att_masks, adarms_cond
 
-    def forward(self, observation, actions, noise=None, time=None) -> Tensor:
+    def forward(self, observation, actions, noise=None, time=None, return_per_dim=False) -> Tensor | tuple[Tensor, Tensor]:
         """Do a full training forward pass and compute the loss (batch_size x num_steps x num_motors)"""
-        images, img_masks, lang_tokens, lang_masks, state = self._preprocess_observation(observation, train=True)
+        images, img_masks, lang_tokens, lang_masks, state, proprio_visibility_mask, task_id = self._preprocess_observation(observation, train=True)
 
         if noise is None:
             noise = self.sample_noise(actions.shape, actions.device)
@@ -332,7 +354,7 @@ class PI0Pytorch(nn.Module):
         u_t = noise - actions
 
         prefix_embs, prefix_pad_masks, prefix_att_masks = self.embed_prefix(images, img_masks, lang_tokens, lang_masks)
-        suffix_embs, suffix_pad_masks, suffix_att_masks, adarms_cond = self.embed_suffix(state, x_t, time)
+        suffix_embs, suffix_pad_masks, suffix_att_masks, adarms_cond = self.embed_suffix(state, x_t, time, proprio_visibility_mask, task_id)
         if (
             self.paligemma_with_expert.paligemma.language_model.layers[0].self_attn.q_proj.weight.dtype
             == torch.bfloat16
@@ -387,7 +409,10 @@ class PI0Pytorch(nn.Module):
             use_delta_weighting=True,
         )  # [B, H]
         
-        return weighted_loss
+        if return_per_dim:
+            return weighted_loss, per_dim_loss  # [B, H], [B, H, D]
+
+        return weighted_loss  # [B, H]
 
     @torch.no_grad()
     def sample_actions(self, device, observation, noise=None, num_steps=10) -> Tensor:
@@ -397,7 +422,7 @@ class PI0Pytorch(nn.Module):
             actions_shape = (bsize, self.config.action_horizon, self.config.action_dim)
             noise = self.sample_noise(actions_shape, device)
 
-        images, img_masks, lang_tokens, lang_masks, state = self._preprocess_observation(observation, train=False)
+        images, img_masks, lang_tokens, lang_masks, state, proprio_visibility_mask, task_id = self._preprocess_observation(observation, train=False)
 
         prefix_embs, prefix_pad_masks, prefix_att_masks = self.embed_prefix(images, img_masks, lang_tokens, lang_masks)
         prefix_att_2d_masks = make_att_2d_masks(prefix_pad_masks, prefix_att_masks)
@@ -428,6 +453,8 @@ class PI0Pytorch(nn.Module):
                 past_key_values,
                 x_t,
                 expanded_time,
+                proprio_visibility_mask,
+                task_id,
             )
 
             # Euler step - use new tensor assignment instead of in-place operation
@@ -442,9 +469,11 @@ class PI0Pytorch(nn.Module):
         past_key_values,
         x_t,
         timestep,
+        proprio_visibility_mask=None,
+        task_id=None,
     ):
         """Apply one denoising step of the noise `x_t` at a given timestep."""
-        suffix_embs, suffix_pad_masks, suffix_att_masks, adarms_cond = self.embed_suffix(state, x_t, timestep)
+        suffix_embs, suffix_pad_masks, suffix_att_masks, adarms_cond = self.embed_suffix(state, x_t, timestep, proprio_visibility_mask, task_id)
 
         suffix_len = suffix_pad_masks.shape[1]
         batch_size = prefix_pad_masks.shape[0]
