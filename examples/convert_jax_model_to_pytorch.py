@@ -444,6 +444,7 @@ def convert_pi0_checkpoint(
             "action_out_proj",
             "time_mlp_in",
             "time_mlp_out",
+            "task_embeddings",
         ]
     else:
         keys = [
