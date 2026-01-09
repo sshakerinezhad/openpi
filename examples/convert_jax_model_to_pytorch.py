@@ -437,17 +437,16 @@ def convert_pi0_checkpoint(
     # Break down orbax ckpts by restoring via JAX to respect dtype
     initial_params = slice_initial_orbax_checkpoint(checkpoint_dir=checkpoint_dir, restore_precision="float32")
 
-    # Process projection params
+    # Process projection params (Linear layers with kernel/bias)
     if model_config.pi05:
-        keys = [
+        linear_keys = [
             "action_in_proj",
             "action_out_proj",
             "time_mlp_in",
             "time_mlp_out",
-            "task_embeddings",
         ]
     else:
-        keys = [
+        linear_keys = [
             "state_proj",
             "action_in_proj",
             "action_out_proj",
@@ -456,7 +455,7 @@ def convert_pi0_checkpoint(
         ]
 
     projection_params = {}
-    for key in keys:
+    for key in linear_keys:
         kernel_params = initial_params["projection_params"][key]["kernel"]
         bias_params = initial_params["projection_params"][key]["bias"]
         if isinstance(kernel_params, dict):
@@ -469,8 +468,19 @@ def convert_pi0_checkpoint(
         pytorch_weight_key = f"{key}.weight"
         pytorch_bias_key = f"{key}.bias"
 
+        # Linear layers need transpose: JAX (in, out) -> PyTorch (out, in)
         projection_params[pytorch_weight_key] = torch.from_numpy(np.array(weight)).T
         projection_params[pytorch_bias_key] = torch.from_numpy(np.array(bias))
+
+    # Process task embeddings separately (Embedding layer, not Linear)
+    if model_config.pi05 and model_config.num_tasks > 0:
+        task_emb_params = initial_params["projection_params"]["task_embeddings"]["embedding"]
+        if isinstance(task_emb_params, dict):
+            task_emb_weight = task_emb_params["value"]
+        else:
+            task_emb_weight = task_emb_params
+        # Embedding layers do NOT need transpose: shape is (num_embeddings, embedding_dim)
+        projection_params["task_embeddings.weight"] = torch.from_numpy(np.array(task_emb_weight))
 
     # Create configs based on checkpoint path
     # All models use the same PaliGemma config structure

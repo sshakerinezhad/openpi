@@ -334,6 +334,8 @@ class PI0Pytorch(nn.Module):
 
         embs = torch.cat(embs, dim=1)
         pad_masks = torch.cat(pad_masks, dim=1)
+        # att_masks = torch.tensor(att_masks, dtype=torch.bool, device=embs.device)
+        # att_masks = att_masks[None, :].expand(bsize, -1)
         att_masks = torch.tensor(att_masks, dtype=embs.dtype, device=embs.device)
         att_masks = att_masks[None, :].expand(bsize, len(att_masks))
 
@@ -425,6 +427,10 @@ class PI0Pytorch(nn.Module):
         images, img_masks, lang_tokens, lang_masks, state, proprio_visibility_mask, task_id = self._preprocess_observation(observation, train=False)
 
         prefix_embs, prefix_pad_masks, prefix_att_masks = self.embed_prefix(images, img_masks, lang_tokens, lang_masks)
+
+        # # Convert embeddings to model dtype (same as training forward pass)
+        # if (self.paligemma_with_expert.paligemma.language_model.layers[0].self_attn.q_proj.weight.dtype == torch.bfloat16):
+        #     prefix_embs = prefix_embs.to(dtype=torch.bfloat16)
         prefix_att_2d_masks = make_att_2d_masks(prefix_pad_masks, prefix_att_masks)
         prefix_position_ids = torch.cumsum(prefix_pad_masks, dim=1) - 1
 
@@ -474,6 +480,10 @@ class PI0Pytorch(nn.Module):
     ):
         """Apply one denoising step of the noise `x_t` at a given timestep."""
         suffix_embs, suffix_pad_masks, suffix_att_masks, adarms_cond = self.embed_suffix(state, x_t, timestep, proprio_visibility_mask, task_id)
+
+        # # Convert suffix embeddings to model dtype (same as training forward pass)
+        # if (self.paligemma_with_expert.paligemma.language_model.layers[0].self_attn.q_proj.weight.dtype == torch.bfloat16):
+        #     suffix_embs = suffix_embs.to(dtype=torch.bfloat16)
 
         suffix_len = suffix_pad_masks.shape[1]
         batch_size = prefix_pad_masks.shape[0]
