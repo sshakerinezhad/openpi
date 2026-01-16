@@ -1,6 +1,7 @@
 # openpi
 
-This is a fork of [Physical Intelligence's openpi](https://github.com/Physical-Intelligence/openpi) with modifications for the [BEHAVIOR-1K Challenge 2025](https://behavior.stanford.edu/).
+> Originally forked from [Physical-Intelligence/openpi](https://github.com/Physical-Intelligence/openpi) and extended for the [BEHAVIOR-1K Challenge 2025](https://behavior.stanford.edu/).
+
 
 ## BEHAVIOR-1K Additions
 
