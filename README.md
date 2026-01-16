@@ -1,5 +1,54 @@
 # openpi
 
+This is a fork of [Physical Intelligence's openpi](https://github.com/Physical-Intelligence/openpi) with modifications for the [BEHAVIOR-1K Challenge 2025](https://behavior.stanford.edu/).
+
+## BEHAVIOR-1K Additions
+
+We added several techniques to train π₀ on humanoid manipulation tasks in simulation. These solved real bottlenecks that were preventing the model from learning.
+
+### Key Changes
+
+| Technique | Problem | Solution | Impact |
+|-----------|---------|----------|--------|
+| **Proprio Dropout** | Model over-indexes on joint state, predicts "continue current trajectory" | 60%→10% decaying dropout schedule | Robot initiates motion from rest |
+| **Receding Horizon Control** | Temporal ensembling causes hesitant, uncommitted actions | Execute full 50-action chunk before replanning | 30%→100% on door navigation |
+| **Per-Group Loss Weighting** | Arm joints ignored (small magnitude vs. base motion) | 2-5x weight for arm joints | 30-50% manipulation improvement |
+| **Task Embeddings** | Multi-task confusion (22 tasks) | Learnable embeddings (102K params) added to time conditioning | Better task disambiguation |
+
+### Modified Files
+
+```
+src/openpi/training/config.py      # 15+ B1K training configs, proprio dropout schedules
+src/openpi/models/pi0.py           # Task embedding integration
+src/openpi/models/pi0_loss_utils.py # Per-group loss weighting
+src/openpi/shared/eval_b1k_wrapper.py # Control modes (receding horizon)
+src/openpi/policies/b1k_policy.py  # B1K-specific policy wrapper
+```
+
+See also: [ARM_STAGNATION_SOLUTIONS.md](ARM_STAGNATION_SOLUTIONS.md), [TASK_EMBEDDINGS_SUMMARY.md](TASK_EMBEDDINGS_SUMMARY.md)
+
+### Training
+
+Two-phase approach: generalist pre-training (22 tasks, heavy dropout) → per-task fine-tuning (reduced dropout).
+
+```bash
+# Compute normalization stats
+uv run scripts/compute_norm_stats.py --config-name b1k_pi0_base
+
+# Train
+XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py b1k_pi0_proprio_dropout --exp-name=my_run
+```
+
+### Links
+
+- **Technical Report**: [merlyn-labs.com/behavior-report](https://merlyn-labs.com/behavior-report)
+- **Companion Repo**: [Merlyn-Labs/BEHAVIOR-1K](https://github.com/Merlyn-Labs/BEHAVIOR-1K)
+- **Contributors**: [@sshakerinezhad](https://github.com/sshakerinezhad), [@salmanshah1d](https://github.com/salmanshah1d)
+
+---
+
+## About openpi
+
 openpi holds open-source models and packages for robotics, published by the [Physical Intelligence team](https://www.physicalintelligence.company/).
 
 Currently, this repo contains three types of models:
@@ -321,3 +370,4 @@ We will collect common issues and their solutions here. If you encounter an issu
 | Import errors when running examples       | Make sure you've installed all dependencies with `uv sync`. Some examples may have additional requirements listed in their READMEs.                    |
 | Action dimensions mismatch                | Verify your data processing transforms match the expected input/output dimensions of your robot. Check the action space definitions in your policy classes.                                  |
 | Diverging training loss                            | Check the `q01`, `q99`, and `std` values in `norm_stats.json` for your dataset. Certain dimensions that are rarely used can end up with very small `q01`, `q99`, or `std` values, leading to huge states and actions after normalization. You can manually adjust the norm stats as a workaround. |
+
