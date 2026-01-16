@@ -30,14 +30,6 @@ class B1KPolicyWrapper():
         self.policy = policy
         self.text_prompt = text_prompt
         self.current_task_id = None
-        # self.control_mode = control_mode
-        # self.action_queue = deque([], maxlen=action_horizon)
-        # self.last_action = {"actions": np.zeros((action_horizon, 23), dtype=np.float64)}
-        # self.action_horizon = action_horizon
-        # self.exp_k_value = exp_k_value
-        # self.max_len = max_len
-        # self.temporal_ensemble_max = temporal_ensemble_max
-        # self.replan_interval = action_horizon # K: replan every 10 steps
         self.step_counter = 0
 
         self.configs = {
@@ -134,7 +126,8 @@ class B1KPolicyWrapper():
     def get_ckpt_path(self, task_id: int) -> str:
         ckpt_sub_dir = self.task_idx_ckpt_path_map.get(int(task_id), "openpi_05_20251113_045215/81000")
         print(f"task_id={task_id}, ckpt_sub_dir={ckpt_sub_dir}")
-        return f"/workspace/openpi/outputs/checkpoints/{ckpt_sub_dir}"
+        ckpt_root = os.environ.get("OPENPI_CKPT_ROOT", "./outputs/checkpoints")
+        return f"{ckpt_root}/{ckpt_sub_dir}"
 
     def reset(self):
         self.action_queue = deque([],maxlen=self.action_horizon)
